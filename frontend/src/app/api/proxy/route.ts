@@ -1,21 +1,83 @@
-export async function GET() {
-  // Base URL for the private backend. On Railway this should resolve via internal DNS, e.g. "http://backend.internal:8080/api/data".
-  // You can override the default via the BACKEND_INTERNAL_URL environment variable at build/runtime.
-  const backendUrl = process.env.BACKEND_INTERNAL_URL || "http://backend.internal:8080/api/data";
+import { NextRequest } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  return handleProxyRequest(request, 'GET');
+}
+
+export async function POST(request: NextRequest) {
+  return handleProxyRequest(request, 'POST');
+}
+
+export async function PUT(request: NextRequest) {
+  return handleProxyRequest(request, 'PUT');
+}
+
+export async function DELETE(request: NextRequest) {
+  return handleProxyRequest(request, 'DELETE');
+}
+
+async function handleProxyRequest(request: NextRequest, method: string) {
+  // Get the path to proxy from query parameter
+  const { searchParams } = new URL(request.url);
+  const path = searchParams.get('path') || '/api/data';
+  
+  // Build backend URL
+  // For local development: http://localhost:3001
+  // For Railway production: http://backend.internal:8080
+  const backendBaseUrl = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
+  const backendUrl = `${backendBaseUrl}${path}`;
 
   try {
-    const backendRes = await fetch(backendUrl, {
-      // Disable caching to always return fresh data
+    // Forward the request to the backend
+    const requestInit: RequestInit = {
+      method,
       cache: "no-store",
-    });
+      headers: {
+        'Content-Type': 'application/json',
+        // Forward authorization header if present
+        ...(request.headers.get('authorization') && {
+          'Authorization': request.headers.get('authorization')!
+        }),
+      },
+    };
 
-    // Attempt to parse JSON regardless of status to relay backend message
-    const data = await backendRes.json();
+    // Add body for POST/PUT requests
+    if (method === 'POST' || method === 'PUT') {
+      try {
+        const body = await request.text();
+        if (body) {
+          requestInit.body = body;
+        }
+      } catch (error) {
+        // No body is fine for some requests
+      }
+    }
 
-    return new Response(JSON.stringify(data), {
-      status: backendRes.status,
-      headers: { "Content-Type": "application/json" },
-    });
+    const backendRes = await fetch(backendUrl, requestInit);
+
+    // Try to parse as JSON, fallback to text
+    let data;
+    const contentType = backendRes.headers.get('content-type');
+    
+    if (contentType?.includes('application/json')) {
+      data = await backendRes.json();
+    } else {
+      data = await backendRes.text();
+    }
+
+    return new Response(
+      typeof data === 'string' ? data : JSON.stringify(data),
+      {
+        status: backendRes.status,
+        headers: { 
+          "Content-Type": contentType || "application/json",
+          // Forward CORS headers if present
+          ...(backendRes.headers.get('access-control-allow-origin') && {
+            'Access-Control-Allow-Origin': backendRes.headers.get('access-control-allow-origin')!
+          }),
+        },
+      }
+    );
   } catch (error) {
     console.error("Proxy error:", error);
     return new Response(

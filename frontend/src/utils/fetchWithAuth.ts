@@ -10,8 +10,15 @@ export async function fetchWithAuth(
     return;
   }
 
+  // Transform API calls to use our proxy
+  let finalInput = input;
+  if (typeof input === 'string' && input.startsWith('/api/')) {
+    // Route through our proxy instead of direct backend calls
+    finalInput = `/api/proxy?path=${encodeURIComponent(input)}`;
+  }
+
   const doFetch = async (authToken: string) => {
-    return fetch(input, {
+    return fetch(finalInput, {
       ...init,
       headers: {
         ...(init.headers || {}),

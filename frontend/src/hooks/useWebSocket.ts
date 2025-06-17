@@ -153,18 +153,23 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
       }
 
       // Build WebSocket endpoint URL
-      // Prefer compile-time env var exposed to browser (NEXT_PUBLIC_WS_URL).
-      // Fallback to current hostname on port 3001 with correct ws/wss protocol.
+      // For local development: connect directly to backend on localhost:3001
+      // For Railway production: use NEXT_PUBLIC_WS_URL environment variable
       const envWsUrl = process.env.NEXT_PUBLIC_WS_URL;
-      let wsBase = envWsUrl;
-      if (!wsBase) {
+      let wsUrl;
+      
+      if (envWsUrl) {
+        // Explicit URL provided (could be gateway or backend public URL)
+        wsUrl = `${envWsUrl}?token=${token}`;
+      } else if (window.location.hostname === 'localhost') {
+        // Local development: connect directly to backend
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname; // no port
-        const defaultPort = '3001';
-        wsBase = `${protocol}//${host}:${defaultPort}`;
+        wsUrl = `${protocol}//localhost:3001?token=${token}`;
+      } else {
+        // Production default: hit the same host's /ws path (handled by custom server proxy)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`;
       }
-
-      const wsUrl = `${wsBase}?token=${token}`;
       
       // console.log(`[WebSocket] Connecting to ${wsUrl}`);
 
