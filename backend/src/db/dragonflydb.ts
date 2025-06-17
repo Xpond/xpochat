@@ -44,10 +44,13 @@ class DragonflyDBManager {
   }
 
   constructor() {
-    this.client = createClient({
-      socket: { host: config.REDIS_HOST, port: config.REDIS_PORT },
-      pingInterval: 1000
-    });
+    // Prefer DRAGONFLY_URL (e.g., "redis://dragonfly.internal:6379") if provided – useful for private networking on Railway
+    this.client = process.env.DRAGONFLY_URL
+      ? createClient({ url: process.env.DRAGONFLY_URL, pingInterval: 1000 })
+      : createClient({
+          socket: { host: config.REDIS_HOST, port: config.REDIS_PORT },
+          pingInterval: 1000,
+        });
     
     this.client.on('error', (err) => {
       if (!this.fallbackMode) {
