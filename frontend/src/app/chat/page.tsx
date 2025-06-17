@@ -18,12 +18,6 @@ const RIGHT_PANEL_WIDTH = '15%';   // e.g., '20%', '25%', '30%'
 // (Exact values chosen after some quick manual testing – tweak if desired.)
 const CHAT_MAX_WIDTH = '68%';    // Tweak this value to adjust the main chat window's width.
 const CHAT_HEIGHT = '97.5%';       // Tweak this value to adjust the main chat window's height.
-const BRAND_FONT_SIZE = 'text-4xl'; // e.g., 'text-xl', 'text-2xl', 'text-3xl'
-
-// --- MESSAGE CUSTOMIZATION ---
-const USER_MESSAGE_MAX_WIDTH = '35%';          // e.g., '30%', '40%', '50%'
-const AI_MESSAGE_MAX_WIDTH = '85%';            // e.g., '70%', '80%', '90%', '100%'
-const MESSAGE_FONT_SIZE = 'text-lg';         // e.g., 'text-sm', 'text-base', 'text-lg', 'text-xl'
 
 // --- WELCOME SUGGESTIONS ---
 const STARTER_SUGGESTIONS = [
@@ -54,7 +48,9 @@ export default function ChatPage() {
     if (typeof window === 'undefined') return '';
     return localStorage.getItem('xpochat:lastChatId') || '';
   });
-  const [models, setModels] = useState<{defaultModels: any[], byokProviders: any}>({defaultModels: [], byokProviders: {}});
+  interface ModelMeta { id: string; name?: string; description?: string; }
+  interface ModelsState { defaultModels: ModelMeta[]; byokProviders: Record<string, ModelMeta[]>; }
+  const [models, setModels] = useState<ModelsState>({ defaultModels: [], byokProviders: {} });
   const [activeApiKeys, setActiveApiKeys] = useState<string[]>([]);
   const [messageCount, setMessageCount] = useState(0);
   const [messageLimit, setMessageLimit] = useState(50);
@@ -63,7 +59,7 @@ export default function ChatPage() {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // WebSocket connection for real-time chat
-  const { isConnected, hasJoined, messages, sendMessage, isTyping, isProcessing, error, resetMessages, replaceMessages, setMessages } = useWebSocket(currentChatId);
+  const { isConnected, hasJoined, messages, sendMessage, isTyping, isProcessing, error, resetMessages, setMessages } = useWebSocket(currentChatId);
 
   // Width (in pixels) of the invisible edge hover area that auto-opens the panels.
   const HOVER_ZONE_WIDTH = 200;
@@ -182,7 +178,7 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Error loading saved theme:', error);
     }
-  }, [getToken]);
+  }, [getToken, changeTheme]);
 
   // Insert handleSelectChat after hook definitions, e.g., after fetchMessageCount or fetchChats definitions but before side effects.
   const handleSelectChat = useCallback((chatId: string) => {
@@ -247,7 +243,7 @@ export default function ChatPage() {
   const generateTitle = (text: string) => {
     if (!text) return 'New Chat';
 
-    let cleaned = text
+    const cleaned = text
       .replace(/^#+\s*/gm, '')        // Strip markdown headings
       .replace(/^[>*+-]\s+/gm, '')     // Strip list markers
       .replace(/[`*_~]/g, '')           // Strip stray markdown symbols
@@ -271,11 +267,12 @@ export default function ChatPage() {
   };
 
   // Send message function
-  const handleSendMessage = (messageData: string | { text: string; attachments: any[] }) => {
+  interface AttachmentMeta { id: string; name: string; type: string; url: string; }
+  const handleSendMessage = (messageData: string | { text: string; attachments: AttachmentMeta[] }) => {
     if (!isConnected) return;
     
     let content: string;
-    let attachments: any[] = [];
+    let attachments: AttachmentMeta[] = [];
     
     if (typeof messageData === 'string') {
       content = messageData.trim();
@@ -327,7 +324,7 @@ export default function ChatPage() {
     }
   };
 
-  const changeTheme = (color: string, gradType = gradientType) => {
+  function changeTheme(color: string, gradType = gradientType) {
     const background = getBackground(color, gradType);
     
     const style = document.createElement('style');
@@ -358,7 +355,7 @@ export default function ChatPage() {
         }).catch(console.error)
       );
     }
-  };
+  }
 
   // Load chat history when the selected chat changes (or on first mount).
   // This now runs independently of the WebSocket connection so that we always
