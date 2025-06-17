@@ -203,6 +203,7 @@ export default function ChatPage() {
     }
   }, [isLoaded, userId]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isLoaded && userId) {
       fetchModels();
@@ -212,7 +213,7 @@ export default function ChatPage() {
       fetchChats();
       loadSavedTheme();
     }
-  }, [isLoaded, userId, getToken, fetchMessageCount, fetchChats, loadSavedTheme, fetchActiveKeys, fetchModels, fetchApiKeys]);
+  }, [isLoaded, userId]);
 
   // Clean up the polling interval if the component unmounts before maxAttempts
   useEffect(() => {
