@@ -17,9 +17,28 @@ export async function DELETE(request: NextRequest) {
 }
 
 async function handleProxyRequest(request: NextRequest, method: string) {
-  // Get the path to proxy from query parameter
+  // Get and validate the path to proxy from the query parameter
   const { searchParams } = new URL(request.url);
-  const path = searchParams.get('path') || '/api/data';
+  const requestedPath = searchParams.get('path');
+
+  // Default path if validation fails or not provided
+  const DEFAULT_PATH = '/api/data';
+
+  // Normalize to always start with '/'
+  const normalizedPath = requestedPath
+    ? requestedPath.startsWith('/')
+      ? requestedPath
+      : `/${requestedPath}`
+    : undefined;
+
+  // Allow only paths that start with allowed prefixes and do not contain path traversal sequences
+  const ALLOWED_PREFIXES = ['/api/'];
+  const isValidPath =
+    normalizedPath !== undefined &&
+    ALLOWED_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix)) &&
+    !normalizedPath.includes('..');
+
+  const path = isValidPath ? normalizedPath! : DEFAULT_PATH;
   
   // Build backend URL
   // For local development: http://localhost:3001
@@ -55,29 +74,20 @@ async function handleProxyRequest(request: NextRequest, method: string) {
 
     const backendRes = await fetch(backendUrl, requestInit);
 
-    // Try to parse as JSON, fallback to text
-    let data;
-    const contentType = backendRes.headers.get('content-type');
-    
-    if (contentType?.includes('application/json')) {
-      data = await backendRes.json();
-    } else {
-      data = await backendRes.text();
+    // Stream the response body directly to the client to preserve streaming capabilities
+    // and support all content types, including binary data.
+    const headers = new Headers(backendRes.headers);
+
+    // Explicitly forward CORS headers if present
+    const corsHeader = backendRes.headers.get('access-control-allow-origin');
+    if (corsHeader) {
+      headers.set('Access-Control-Allow-Origin', corsHeader);
     }
 
-    return new Response(
-      typeof data === 'string' ? data : JSON.stringify(data),
-      {
-        status: backendRes.status,
-        headers: { 
-          "Content-Type": contentType || "application/json",
-          // Forward CORS headers if present
-          ...(backendRes.headers.get('access-control-allow-origin') && {
-            'Access-Control-Allow-Origin': backendRes.headers.get('access-control-allow-origin')!
-          }),
-        },
-      }
-    );
+    return new Response(backendRes.body, {
+      status: backendRes.status,
+      headers,
+    });
   } catch (error) {
     console.error("Proxy error:", error);
     return new Response(
