@@ -231,13 +231,19 @@ export default function ChatPage() {
   // currently selected chat so that it appears in the history list even if
   // it hasn't been persisted to the backend yet (e.g., brand-new chat).
   useEffect(() => {
-    if (currentChatId && !chats.some((c) => c.id === currentChatId)) {
-      setChats((prev) => [
-        ...prev,
-        { id: currentChatId, title: 'New Chat', created: Date.now() },
-      ].sort((a, b) => b.created - a.created));
-    }
-  }, [currentChatId, chats]);
+    setChats(prev => {
+      if (
+        currentChatId &&
+        !prev.some((c) => c.id === currentChatId)
+      ) {
+        return [
+          ...prev,
+          { id: currentChatId, title: 'New Chat', created: Date.now() },
+        ].sort((a, b) => b.created - a.created);
+      }
+      return prev;
+    });
+  }, [currentChatId]);
 
   // === Helper: generate a readable title from message ===
   const generateTitle = (text: string) => {

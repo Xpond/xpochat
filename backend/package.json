@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@clerk/clerk-sdk-node": "^5.0.12",
-    "@mendable/firecrawl-js": "^1.25.5",
     "@neondatabase/serverless": "^1.0.1",
     "cloudinary": "^2.6.1",
     "cors": "^2.8.5",
