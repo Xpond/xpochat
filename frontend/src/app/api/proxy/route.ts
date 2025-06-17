@@ -41,9 +41,10 @@ async function handleProxyRequest(request: NextRequest, method: string) {
   const path = isValidPath ? normalizedPath! : DEFAULT_PATH;
   
   // Build backend URL
-  // For local development: http://localhost:3001
-  // For Railway production: http://backend.internal:8080
-  const backendBaseUrl = process.env.BACKEND_INTERNAL_URL || "http://localhost:3001";
+  // Local dev default → http://localhost:3001
+  // Production default (Railway) → http://backend.internal:8080
+  const isDev = process.env.NODE_ENV !== 'production';
+  const backendBaseUrl = process.env.BACKEND_INTERNAL_URL || (isDev ? "http://localhost:3001" : "http://backend.internal:8080");
   const backendUrl = `${backendBaseUrl}${path}`;
 
   try {
