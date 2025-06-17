@@ -8,6 +8,7 @@ import MessageList from '../../components/chat/MessageList';
 import ChatInputArea from '../../components/chat/ChatInputArea';
 import ChatHistoryPanel, { ChatMeta } from '../../components/chat/ChatHistoryPanel';
 import SettingsPanel from '../../components/chat/SettingsPanel';
+import { fetchWithAuth } from '../../utils/fetchWithAuth';
 
 // --- EASY UI CUSTOMIZATION ---
 const LEFT_PANEL_WIDTH = '15%';    // e.g., '20%', '25%', '30%'
@@ -68,49 +69,53 @@ export default function ChatPage() {
   const fetchApiKeys = useCallback(async () => {
     try {
         const token = await getToken();
-        const response = await fetch('/api/user/keys/all', {
+        const response = await fetchWithAuth(getToken, '/api/user/keys/all', {
             headers: { Authorization: `Bearer ${token}` }
         });
+        if (!response) return;
         if (!response.ok) throw new Error('Failed to fetch API keys');
         const data = await response.json();
         setApiKeys(data.keys || {});
     } catch (error) {
-        console.error("Error fetching api keys:", error);
+//      console.error("Error fetching api keys:", error);
     }
   }, [getToken]);
 
   const fetchModels = useCallback(async () => {
     try {
       const token = await getToken();
-      const response = await fetch('/api/models', {
+      const response = await fetchWithAuth(getToken, '/api/models', {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!response) return;
       if (!response.ok) throw new Error('Failed to fetch models');
       const data = await response.json();
       setModels(data);
     } catch (error) {
-      console.error('Error fetching models:', error);
+//      console.error('Error fetching models:', error);
     }
   }, [getToken]);
 
   const fetchActiveKeys = useCallback(async () => {
     try {
       const token = await getToken();
-      const response = await fetch('/api/user/keys', {
+      const response = await fetchWithAuth(getToken, '/api/user/keys', {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!response) return;
       if (!response.ok) throw new Error('Failed to fetch keys');
       const data = await response.json();
       setActiveApiKeys(data.activeKeys || []);
     } catch (error) {
-      console.error('Error fetching active keys:', error);
+//      console.error('Error fetching active keys:', error);
     }
   }, [getToken]);
 
   const fetchChats = useCallback(async () => {
     try {
       const token = await getToken();
-      const response = await fetch('/api/chats', { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetchWithAuth(getToken, '/api/chats', { headers: { Authorization: `Bearer ${token}` } });
+      if (!response) return;
       if (!response.ok) throw new Error('Failed to fetch chats');
       const data = await response.json();
       setChats((prev) => {
@@ -132,31 +137,33 @@ export default function ChatPage() {
         return (data.chats[0]?.id) || `chat_${Date.now()}`;
       });
     } catch (err) {
-      console.error('Error fetching chats', err);
+//      console.error('Error fetching chats', err);
     }
   }, [getToken]);
 
   const fetchMessageCount = useCallback(async () => {
     try {
       const token = await getToken();
-      const response = await fetch('/api/user/message-count', {
+      const response = await fetchWithAuth(getToken, '/api/user/message-count', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!response) return;
       if (!response.ok) throw new Error('Failed to fetch message count');
       const data = await response.json();
       setMessageCount(data.messageCount ?? 0);
       setMessageLimit(data.limit ?? 50);
     } catch (error) {
-      console.error("Error fetching message count:", error);
+//      console.error("Error fetching message count:", error);
     }
   }, [getToken]);
 
   const loadSavedTheme = useCallback(async () => {
     try {
       const token = await getToken();
-      const response = await fetch('/api/user/theme', {
+      const response = await fetchWithAuth(getToken, '/api/user/theme', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!response) return;
       if (!response.ok) throw new Error('Failed to fetch theme');
       const data = await response.json();
       const { color, gradientType, containerOpacity, fontSize } = data.theme;
@@ -176,7 +183,7 @@ export default function ChatPage() {
       }
       changeTheme(color, gradientType);
     } catch (error) {
-      console.error('Error loading saved theme:', error);
+//      console.error('Error loading saved theme:', error);
     }
   }, [getToken, changeTheme]);
 
@@ -354,10 +361,13 @@ export default function ChatPage() {
     // Save theme
     if (userId) {
       getToken().then(token => 
-        fetch('/api/user/theme', {
+        fetchWithAuth(getToken, '/api/user/theme', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ color, gradientType: gradType, containerOpacity, fontSize })
+        }).then(response => {
+          if (!response) return;
+          // Optionally handle response
         }).catch(console.error)
       );
     }
@@ -375,47 +385,49 @@ export default function ChatPage() {
       
       try {
         const token = await getToken();
-        const response = await fetch(`/api/chats/${currentChatId}`, {
+        const response = await fetchWithAuth(getToken, `/api/chats/${currentChatId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        if (response.ok) {
-          const data = await response.json();
-          const parsedMsgs = JSON.parse(data.chat.messages || '[]').map((m: any, idx: number) => ({
-            id: `${currentChatId}-${idx}`,
-            role: m.role,
-            ...(() => {
-              if (m.reasoning) {
-                return { content: m.content, reasoning: m.reasoning };
-              }
-              if (typeof m.content === 'string' && m.content.includes('__REASONING__')) {
-                const segments = m.content.split('__REASONING__');
-                const answer = segments.shift() || '';
-                const reasoningCollected = segments.join('');
-                return { content: answer, reasoning: reasoningCollected };
-              }
-              return { content: m.content };
-            })(),
-            ...(m.audio ? { audio: m.audio } : {}),
-            ...(m.attachments ? { attachments: m.attachments } : {}),
-            reasoningOpen: false,
-            timestamp: Date.now()
-          }));
+        if (response) {
+          if (response.ok) {
+            const data = await response.json();
+            const parsedMsgs = JSON.parse(data.chat.messages || '[]').map((m: any, idx: number) => ({
+              id: `${currentChatId}-${idx}`,
+              role: m.role,
+              ...(() => {
+                if (m.reasoning) {
+                  return { content: m.content, reasoning: m.reasoning };
+                }
+                if (typeof m.content === 'string' && m.content.includes('__REASONING__')) {
+                  const segments = m.content.split('__REASONING__');
+                  const answer = segments.shift() || '';
+                  const reasoningCollected = segments.join('');
+                  return { content: answer, reasoning: reasoningCollected };
+                }
+                return { content: m.content };
+              })(),
+              ...(m.audio ? { audio: m.audio } : {}),
+              ...(m.attachments ? { attachments: m.attachments } : {}),
+              reasoningOpen: false,
+              timestamp: Date.now()
+            }));
 
-          // If we already have an assistant message (stream-progress) keep it and
-          // prepend the historical messages in case they are missing.
-          setMessages(prev => {
-            if (prev.length === 0) {
-              return parsedMsgs;
-            }
-            // Determine if the last message is an assistant stream not yet in history.
-            const lastPrev = prev[prev.length - 1];
-            const historyHasAssistant = parsedMsgs.some((pm: any) => pm.role === 'assistant');
-            if (lastPrev.role === 'assistant' && !historyHasAssistant) {
-              return [...parsedMsgs, lastPrev];
-            }
-            return prev;
-          });
+            // If we already have an assistant message (stream-progress) keep it and
+            // prepend the historical messages in case they are missing.
+            setMessages(prev => {
+              if (prev.length === 0) {
+                return parsedMsgs;
+              }
+              // Determine if the last message is an assistant stream not yet in history.
+              const lastPrev = prev[prev.length - 1];
+              const historyHasAssistant = parsedMsgs.some((pm: any) => pm.role === 'assistant');
+              if (lastPrev.role === 'assistant' && !historyHasAssistant) {
+                return [...parsedMsgs, lastPrev];
+              }
+              return prev;
+            });
+          }
         }
       } catch (err) {
         console.error('Error loading chat history:', err);
@@ -437,11 +449,12 @@ export default function ChatPage() {
     if (!newTitle) return;
     try {
       const token = await getToken();
-      await fetch(`/api/chats/${chatId}`, {
+      const response = await fetchWithAuth(getToken, `/api/chats/${chatId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ title: newTitle })
       });
+      if (!response) return;
       fetchChats();
     } catch (err) {
       console.error('Failed to rename chat', err);
@@ -451,10 +464,11 @@ export default function ChatPage() {
   const handleDeleteChat = async (chatId: string) => {
     try {
       const token = await getToken();
-      await fetch(`/api/chats/${chatId}`, {
+      const response = await fetchWithAuth(getToken, `/api/chats/${chatId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!response) return;
       setChats((prev) => prev.filter((c) => c.id !== chatId));
       if (currentChatId === chatId) {
         const nextChat = chats.find((c) => c.id !== chatId);
@@ -479,7 +493,7 @@ export default function ChatPage() {
       const branchMessages = messages.slice(0, fromMessageIndex + 1);
       
       // Create the new chat with branched messages
-      const response = await fetch('/api/chats/branch', {
+      const response = await fetchWithAuth(getToken, '/api/chats/branch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -494,7 +508,7 @@ export default function ChatPage() {
         })
       });
 
-      if (response.ok) {
+      if (response) {
         // Add the new chat to the chat list
         const branchTitle = `Branch from ${chats.find(c => c.id === currentChatId)?.title || 'Chat'}`;
         setChats((prev) => [{

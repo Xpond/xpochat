@@ -139,14 +139,14 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
       ws.current &&
       (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)
     ) {
-      console.log('[WebSocket] Already connected or connecting.');
+      // console.log('[WebSocket] Already connected or connecting.');
       return;
     }
 
     try {
       const token = await getToken();
       if (!token) {
-        console.log('[WebSocket] Authentication token not available. Will retry shortly.');
+        // console.log('[WebSocket] Authentication token not available. Will retry shortly.');
         // Retry again soon – Clerk may still be initialising when the component mounts
         setTimeout(connect, 1000);
         return;
@@ -166,7 +166,7 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
 
       const wsUrl = `${wsBase}?token=${token}`;
       
-      console.log(`[WebSocket] Connecting to ${wsUrl}`);
+      // console.log(`[WebSocket] Connecting to ${wsUrl}`);
 
       // Create a new socket and keep a *local* reference so that the event
       // handlers interact with the correct instance even if `ws.current` is
@@ -175,7 +175,7 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
       ws.current = socket;
 
       socket.onopen = () => {
-        console.log('[WebSocket] Connection opened.');
+        // console.log('[WebSocket] Connection opened.');
         setIsConnected(true);
         setError(null);
         setHasJoined(false);
@@ -196,12 +196,12 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
       };
 
       socket.onmessage = (event) => {
-        console.log('[WebSocket] Message received:', event.data);
+        // console.log('[WebSocket] Message received:', event.data);
         const data = JSON.parse(event.data);
         
         if (data.type === 'joined') {
           // You can use this for confirmation, but isConnected is already true
-          console.log(`[WebSocket] Successfully joined chat: ${data.chatId}`);
+          // console.log(`[WebSocket] Successfully joined chat: ${data.chatId}`);
           setHasJoined(true);
         } else if (data.type === 'token' && data.chatId === chatIdRef.current) {
           // Token for the currently active chat – begin/continue streaming
@@ -279,7 +279,7 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
       };
 
       socket.onclose = (event) => {
-        console.log('[WebSocket] Connection closed:', event);
+        // console.log('[WebSocket] Connection closed:', event);
         setIsConnected(false);
         setIsProcessing(false); // Stop processing on disconnect
         // Auto-reconnect unless closed intentionally (code 1000)
@@ -290,7 +290,7 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
       };
 
       socket.onerror = (error) => {
-        console.error('[WebSocket] Error:', error);
+        // console.error('[WebSocket] Error:', error);
         setError('Connection failed');
         setIsConnected(false);
         setIsProcessing(false); // Stop processing on error
