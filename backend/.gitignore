@@ -1,0 +1,17 @@
+# Backend-specific artifacts
+uploads/
+dist/
+
+node_modules
+# node_modules
+
+.env*
+# .env*
+*.log
+# *.log
+coverage/
+# coverage/
+.DS_Store
+# .DS_Store
+backend/uploads/ 
+# backend/uploads/ 

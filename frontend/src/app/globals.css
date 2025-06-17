@@ -1,0 +1,321 @@
+﻿@import "tailwindcss";
+
+:root {
+  --background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 30%, #0f2f2f 60%, #1a4a4a 100%);
+  --foreground: #ededed;
+  --container-bg: rgba(26, 26, 26, 0.8);
+  --container-border: rgba(26, 74, 74, 0.3);
+  --teal-primary: #1a4a4a;
+  --teal-secondary: #0f2f2f;
+  --dark-primary: #0a0a0a;
+  --dark-secondary: #1a1a1a;
+  --teal-primary-rgb: 20, 184, 166;
+  --container-opacity: 0.26;
+  --container-font-size: 1rem;
+}
+
+/* Theme configuration for Tailwind CSS
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-primary);
+  --font-mono: var(--font-primary);
+}
+*/
+
+body {
+  background: var(--background);
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
+
+/* Reasoning border pulse animation */
+.reasoning-border-pulse {
+  border: 2px solid var(--teal-primary, #1a4a4a);
+  animation: reasoning-pulse 2s ease-in-out infinite;
+}
+
+@keyframes reasoning-pulse {
+  0%, 100% {
+    border-color: var(--teal-primary, #1a4a4a);
+    box-shadow: 0 0 4px var(--teal-primary, #1a4a4a);
+  }
+  50% {
+    border-color: var(--teal-primary, #1a4a4a);
+    box-shadow: 0 0 12px var(--teal-primary, #1a4a4a);
+  }
+}
+
+/* Dynamic scrollbar colour – uses --teal-primary-rgb set by the colour picker */
+.code-scrollbar {
+  scrollbar-width: thin;
+  /* Firefox */
+  scrollbar-color: rgba(var(--teal-primary-rgb, 45, 212, 191), 0.4) transparent;
+}
+
+.code-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.code-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(var(--teal-primary-rgb, 45, 212, 191), 0.4);
+  border-radius: 3px;
+}
+
+/* Code block text selection highlight – same dynamic colour */
+pre::selection,
+code::selection,
+pre code::selection {
+  background: rgba(var(--teal-primary-rgb, 45, 212, 191), 0.35);
+  color: #ffffff;
+}
+
+/* Optimize text rendering for better LCP */
+h1, h2, h3, h4, h5, h6 {
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Prevent layout shifts with font fallbacks */
+.font-fallback {
+  font-family: var(--font-primary), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Ensure critical text renders immediately */
+.text-critical {
+  font-display: swap;
+  will-change: transform;
+}
+
+/* Optimize brand name specifically for LCP without changing appearance */
+.brand-name {
+  contain: layout style;
+  font-display: swap;
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Three.js background */
+#three-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Theme Controls Styling */
+.color-input-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.color-input-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(from 0deg, #ff6b6b, #ffa726, #ffeb3b, #66bb6a, #42a5f5, #ab47bc, #ff6b6b);
+  opacity: 0.1;
+  pointer-events: none;
+  border-radius: 0.5rem;
+}
+
+/* Container font sizing */
+.container-font {
+  font-size: var(--container-font-size, 1rem);
+}
+
+/* Apply container font size to message content */
+.container-font .prose p,
+.container-font .prose li,
+.container-font .prose blockquote,
+.container-font .prose strong,
+.container-font .prose em {
+  font-size: var(--container-font-size, 1rem) !important;
+}
+
+/* Apply container font size to textarea */
+.container-font textarea {
+  font-size: var(--container-font-size, 1rem) !important;
+}
+
+/* Apply container font size to code blocks */
+.container-font .prose pre,
+.container-font .prose code {
+  font-size: var(--container-font-size, 1rem) !important;
+}
+
+.container-font pre {
+  font-size: var(--container-font-size, 1rem) !important;
+}
+
+.container-font code {
+  font-size: calc(var(--container-font-size, 1rem) * 0.9) !important;
+}
+
+/* Apply container font size to headers with scaling */
+.container-font .prose h1 {
+  font-size: calc(var(--container-font-size, 1rem) * 2) !important;
+}
+
+.container-font .prose h2 {
+  font-size: calc(var(--container-font-size, 1rem) * 1.5) !important;
+}
+
+.container-font .prose h3 {
+  font-size: calc(var(--container-font-size, 1rem) * 1.25) !important;
+}
+
+/* Range slider styling */
+.opacity-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+
+.opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgb(var(--teal-primary-rgb, 20, 184, 166));
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.opacity-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgb(var(--teal-primary-rgb, 20, 184, 166));
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Custom select styling for cross-browser compatibility */
+.custom-select {
+  /* Remove default styling across all browsers */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  
+  /* Remove Safari-specific styling */
+  border-radius: 0.5rem;
+  -webkit-border-radius: 0.5rem;
+  box-shadow: none;
+  -webkit-box-shadow: none;
+  
+  /* Custom styling that matches the theme */
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(var(--teal-primary-rgb, 20, 184, 166), 0.4);
+  border-radius: 0.5rem;
+  padding: 0.75rem 2.5rem 0.75rem 0.75rem;
+  color: white;
+  font-size: var(--container-font-size, 0.875rem);
+  line-height: 1.25rem;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease-in-out;
+  font-family: inherit;
+  
+  /* Custom dropdown arrow using teal color */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2314b8a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+}
+
+.custom-select:hover {
+  border-color: rgba(var(--teal-primary-rgb, 20, 184, 166), 0.6);
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.custom-select:focus {
+  border-color: rgb(var(--teal-primary-rgb, 20, 184, 166));
+  box-shadow: 0 0 0 2px rgba(var(--teal-primary-rgb, 20, 184, 166), 0.2);
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Style select options - limited browser support but helps where possible */
+.custom-select option {
+  background-color: rgba(26, 26, 26, 0.95);
+  color: white;
+  padding: 0.5rem;
+  border: none;
+}
+
+/* Safari-specific fixes */
+@supports (-webkit-appearance: none) {
+  .custom-select {
+    /* Ensure consistent height in Safari */
+    min-height: 2.75rem;
+    /* Fix Safari's handling of select elements */
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    /* Ensure Safari respects our border radius */
+    border-radius: 0.5rem !important;
+    -webkit-border-radius: 0.5rem !important;
+    /* Remove Safari's default box shadow */
+    box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+  }
+  
+  .custom-select:focus {
+    /* Safari focus styling */
+    outline: none !important;
+    border-color: rgb(var(--teal-primary-rgb, 20, 184, 166)) !important;
+    box-shadow: 0 0 0 2px rgba(var(--teal-primary-rgb, 20, 184, 166), 0.2) !important;
+  }
+  
+  .custom-select:hover {
+    border-color: rgba(var(--teal-primary-rgb, 20, 184, 166), 0.6) !important;
+  }
+}
+
+/* Firefox-specific fixes */
+@-moz-document url-prefix() {
+  .custom-select {
+    /* Firefox select arrow positioning */
+    background-position: right 0.5rem center;
+    padding-right: 2rem;
+  }
+}
+
+/* Edge/IE specific fixes */
+.custom-select::-ms-expand {
+  display: none;
+}
