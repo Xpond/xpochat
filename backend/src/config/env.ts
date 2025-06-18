@@ -58,7 +58,7 @@ const loadConfig = (): Config => {
     const config: Config = {
       // Server configuration
       PORT: getEnvNumber('PORT', 3001),
-      HOST: getEnv('HOST', '0.0.0.0'),
+      HOST: getEnv('HOST', '::'),
       NODE_ENV: getEnv('NODE_ENV', 'development'),
       
       // Authentication (optional for development)
