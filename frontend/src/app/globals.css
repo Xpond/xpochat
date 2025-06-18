@@ -41,7 +41,9 @@ body {
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;  /* Safari and Chrome */
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;  /* Safari and Chrome */
 }
 
 /* Reasoning border pulse animation */

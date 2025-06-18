@@ -98,7 +98,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         backgroundColor: `rgba(var(--teal-primary-rgb, 20, 184, 166), var(--container-opacity, 0.26))`
       }}
       onMouseLeave={onClose}
-      className={`fixed right-0 backdrop-blur-sm p-4 pr-8 transition-transform duration-300 z-20 overflow-x-hidden container-font rounded-lg ${
+      className={`fixed right-0 backdrop-blur-sm p-4 pr-8 transition-transform duration-300 z-20 overflow-y-auto overflow-x-hidden scrollbar-hide container-font rounded-lg ${
         rightPanelOpen ? 'translate-x-0' : 'translate-x-[110%]'
       }`}
     >

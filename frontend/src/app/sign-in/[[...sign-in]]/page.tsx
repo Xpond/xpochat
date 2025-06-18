@@ -15,7 +15,7 @@ export default function SignInPage() {
         </div>
         <div className="w-full flex justify-center">
           <SignIn 
-            redirectUrl="/chat"
+            fallbackRedirectUrl="/chat"
             appearance={{
               baseTheme: undefined,
               variables: {

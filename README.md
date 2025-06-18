@@ -24,11 +24,14 @@ A lightning-fast, beautifully simple AI chat platform with real-time streaming a
 - `NODE_ENV` - Environment (development/production)
 - `CLERK_SECRET_KEY` - Authentication secret key
 - `REDIS_HOST/REDIS_PORT` - DragonflyDB/Redis (default: localhost:6379)
+**optional**
 - `DATABASE_URL` - Neon Postgres connection string (postgresql://user:pass@endpoint.neon.tech/db)
 - `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` - File storage CDN
 - `LOG_ENABLED/LOG_LEVEL` - Logging configuration
 - `ENABLE_TTS` - Text-to-speech via ElevenLabs (default: false)
 - `OPENROUTER_API_KEY` - Default AI provider key
+
+
 
 **Frontend** (`frontend/.env`):
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Clerk public key

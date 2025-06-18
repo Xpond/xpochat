@@ -74,7 +74,7 @@ export default function ModelSelector({
     <div ref={containerRef} className={`relative ${className}`}>
       <button
         onClick={() => setOpen((p) => !p)}
-        className="px-3 py-2 bg-teal-800/30 text-teal-300 rounded-lg hover:bg-teal-800/50 transition-colors text-sm w-full truncate"
+        className="px-3 py-1.5 bg-teal-800/30 text-teal-300 rounded-lg hover:bg-teal-800/50 transition-colors text-sm w-full truncate"
       >
         {displayNameForModel()}
       </button>
@@ -87,7 +87,7 @@ export default function ModelSelector({
               placeholder="Search models..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-black/20 border border-teal-800/30 rounded px-3 py-2 text-base text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full bg-black/20 border border-teal-800/30 rounded px-3 py-1.5 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
 
@@ -125,7 +125,7 @@ export default function ModelSelector({
                           <button
                             key={model.id}
                             onClick={() => handleSelect(model.id)}
-                            className="w-full text-left px-3 py-1.5 text-gray-300 hover:bg-black/30 hover:text-white transition-colors text-base rounded"
+                            className="w-full text-left px-3 py-1.5 text-gray-300 hover:bg-black/30 hover:text-white transition-colors text-sm rounded"
                           >
                             {model.name}
                           </button>
@@ -167,7 +167,7 @@ export default function ModelSelector({
                       <button
                         key={model.id}
                         onClick={() => handleSelect(model.id)}
-                        className="w-full text-left px-3 py-1.5 text-gray-300 hover:bg-black/30 hover:text-white transition-colors text-base rounded"
+                        className="w-full text-left px-3 py-1.5 text-gray-300 hover:bg-black/30 hover:text-white transition-colors text-sm rounded"
                       >
                         {model.name}
                       </button>

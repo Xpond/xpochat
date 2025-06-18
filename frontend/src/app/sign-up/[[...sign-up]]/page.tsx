@@ -14,7 +14,7 @@ export default function SignUpPage() {
         </div>
         <div className="w-full flex justify-center">
           <SignUp 
-            redirectUrl="/chat"
+            fallbackRedirectUrl="/chat"
             appearance={{
               baseTheme: undefined,
               variables: {

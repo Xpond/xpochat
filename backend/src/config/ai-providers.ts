@@ -12,7 +12,7 @@ const ProviderConfigSchema = z.object({
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
 export const DEFAULT_MODELS = [
-    { name: 'Google Gemini 2.5 Flash', id: 'google/gemini-2.5-flash-preview-05-20' },
+    { name: 'Google Gemini 2.5 flash-lite', id: 'google/gemini-2.5-flash-lite-preview-06-17' },
     { name: 'Grok 3 Mini Beta', id: 'x-ai/grok-3-mini-beta' },
     { name: 'DeepSeek R1', id: 'deepseek/deepseek-r1-0528' },
 ];
