@@ -97,7 +97,10 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     for (const file of fileArray) {
       // Validate file size (10MB limit)
       if (file.size > 10 * 1024 * 1024) {
-        alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+        // TODO: Replace with proper toast notification in production
+        if (process.env.NODE_ENV === 'development') {
+          alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+        }
         continue;
       }
 
@@ -120,6 +123,21 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         console.error('No auth token for upload');
         setAttachments((prev) => prev.filter((a) => a.id !== id));
         return;
+      }
+
+      // Generate Base64 for images (needed for AI processing)
+      let base64Data: string | undefined;
+      if (isImage) {
+        try {
+          base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        } catch (err) {
+          console.error('Failed to generate Base64 for image:', err);
+        }
       }
 
       // Async upload
@@ -152,6 +170,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 preview: isImage ? url : a.preview,
                 serverId: data.attachmentId,
                 extractedText: data.extractedText || undefined,
+                base64: base64Data, // Store Base64 for AI processing
               } : a
             )
           );
@@ -232,7 +251,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           name: a.name,
           type: a.type,
           url: a.url,
-          base64: a.base64,
+          base64: a.base64, // Include Base64 data for AI processing
           text: a.extractedText,
         })),
     };

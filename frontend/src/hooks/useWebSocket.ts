@@ -9,6 +9,8 @@ interface Message {
   reasoningOpen?: boolean; // Controls dropdown open state
   audio?: string; // base64 audio for playback (assistant)
   attachments?: Array<{ id: string; name: string; type: string; url?: string; base64?: string }>;
+  model?: string; // Model id used for assistant response (e.g., google/gemini-1.5)
+  streaming?: boolean; // True while response is still streaming
   timestamp: number;
 }
 
@@ -39,10 +41,20 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
   // Queue of individual characters to render; keeps UI feather-light while showing
   // a steady drip instead of bursty chunks.
   const charQueueRef = useRef<string[]>([]);
+  const currentModelRef = useRef<string>('');
+  const streamFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processingRef = useRef(false);
 
-  // Tune how many characters are rendered each animation frame.
-  const CHARS_PER_FRAME = 12; // adjust for desired speed – higher = faster & smoother (fewer reflows)
+  // Streaming speed is configurable via env. `NEXT_PUBLIC_STREAMING_SPEED` is expected to be
+  // "words per second" (WPS). We convert that to an approximate number of characters to
+  // render per animation frame based on a 60 fps render loop and an average word length.
+  const DEFAULT_WPS = 15; // fallback when the env var is missing or invalid
+  const AVERAGE_CHARS_PER_WORD = 5; // rough heuristic – tweak if necessary
+  const wordsPerSecond = parseFloat(process.env.NEXT_PUBLIC_STREAMING_SPEED || `${DEFAULT_WPS}`);
+  const CHARS_PER_FRAME = Math.max(
+    1,
+    Math.round((wordsPerSecond * AVERAGE_CHARS_PER_WORD) / 60)
+  ); // higher = faster (fewer reflows)
 
   // Keep a mutable reference to the latest chatId so that event handlers created
   // once (like ws.onmessage) can always access the up-to-date value without
@@ -69,6 +81,8 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
           id: Date.now().toString(),
           role: 'assistant',
           content: chars,
+          model: currentModelRef.current,
+          streaming: true,
           reasoningOpen: false,
           timestamp: Date.now(),
         },
@@ -92,16 +106,17 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
           role: 'assistant',
           content: '',
           reasoning: reasoning,
+          model: currentModelRef.current,
+          streaming: true,
           reasoningOpen: true,
           timestamp: Date.now(),
         },
       ];
     });
 
-    // Keep the reasoning panel open while streaming; the user can collapse manually.
-    // Previous auto-collapse behaviour caused flicker when tokens paused.
-    // If automatic collapse is desired in the future, implement a debounced timeout
-    // based on a stream-finished event instead of individual tokens.
+    // Reset finish timer as we received new data
+    if (streamFinishTimeoutRef.current) clearTimeout(streamFinishTimeoutRef.current);
+    streamFinishTimeoutRef.current = setTimeout(markStreamingDone, 750);
   }, []);
 
   const processQueue = useCallback(() => {
@@ -119,10 +134,24 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
     requestAnimationFrame(processQueue);
   }, [appendCharsToMessage]);
 
+  const markStreamingDone = useCallback(() => {
+    setMessages(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      if (last.role === 'assistant' && last.streaming) {
+        return [...prev.slice(0, -1), { ...last, streaming: false }];
+      }
+      return prev;
+    });
+  }, []);
+
   const enqueueChars = (text: string) => {
     // Push each character so we control granularity.
     // Using spread is okay on small strings (tokens are short).
     charQueueRef.current.push(...[...text]);
+    // Reset finish timer
+    if (streamFinishTimeoutRef.current) clearTimeout(streamFinishTimeoutRef.current);
+    streamFinishTimeoutRef.current = setTimeout(markStreamingDone, 750);
     if (!processingRef.current) {
       processingRef.current = true;
       requestAnimationFrame(processQueue);
@@ -272,7 +301,9 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
           } catch (err) {
             // Silently ignore malformed payloads in production but log in dev
             if (process.env.NODE_ENV !== 'production') {
-              console.error('[WebSocket] Failed to parse message', err, raw);
+              if (process.env.NODE_ENV === 'development') {
+          console.error('[WebSocket] Failed to parse message', err, raw);
+        }
             }
           }
         };
@@ -310,11 +341,12 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
 
   const sendMessage = useCallback((content: string, model: string, fullMessageHistory: Message[], attachments?: any[]) => {
     if (ws.current?.readyState === WebSocket.OPEN && hasJoined) {
+      currentModelRef.current = model;
       const userMessage: Message = {
         id: Date.now().toString(),
         role: 'user',
         content,
-        attachments: (attachments || []).map(a => ({ id: a.id, name: a.name, type: a.type, url: a.url })),
+        attachments: (attachments || []).map(a => ({ id: a.id, name: a.name, type: a.type, url: a.url, base64: a.base64 })),
         timestamp: Date.now()
       };
       
@@ -344,8 +376,18 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
 
   // Reset messages when switching chats from outside the hook
   const resetMessages = useCallback(() => {
+    // Clear message list displayed in UI
     setMessages([]);
-    setIsProcessing(false); // Reset processing state
+    // Reset UI processing indicators
+    setIsProcessing(false);
+
+    // --- Prevent chat-bleeding -------------------------------------------------
+    // If we switch to another chat while the previous one is still streaming,
+    // there may be characters left in the queue or an animation frame that
+    // will attempt to flush them.  Clearing both the queue _and_ the flag
+    // ensures no tokens from the previous chat leak into the new chat.
+    charQueueRef.current = [];
+    processingRef.current = false;
   }, []);
 
   // Re-join the new chat room whenever the chatId prop changes

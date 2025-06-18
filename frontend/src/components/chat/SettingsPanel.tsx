@@ -26,6 +26,7 @@ interface SettingsPanelProps {
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
   changeTheme: (color: string, gradType?: string) => void;
+  markThemeAdjustment: () => void;
   /** Callback fired when the mouse leaves the panel so the parent can close it. */
   onClose: () => void;
 }
@@ -57,27 +58,35 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   fontSize,
   setFontSize,
   changeTheme,
+  markThemeAdjustment,
   onClose,
 }) => {
   
   // Debounced opacity change handler
   const handleOpacityChange = (newOpacity: number) => {
     setContainerOpacity(newOpacity);
-    // Debounce the theme change to avoid too many calls
-    const timeoutId = setTimeout(() => {
-      changeTheme(selectedColor, gradientType);
-    }, 100);
-    return () => clearTimeout(timeoutId);
+
+    // Update the CSS variable immediately for snappy UI feedback
+    const actualOpacity = 0.9 - (newOpacity * 0.8) / 100;
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--container-opacity', actualOpacity.toString());
+    }
+
+    // Mark theme adjustment to keep panels open
+    markThemeAdjustment();
   };
 
   // Debounced font size change handler
   const handleFontSizeChange = (newFontSize: number) => {
     setFontSize(newFontSize);
-    // Debounce the theme change to avoid too many calls
-    const timeoutId = setTimeout(() => {
-      changeTheme(selectedColor, gradientType);
-    }, 100);
-    return () => clearTimeout(timeoutId);
+
+    const actualFontSize = 0.75 + (newFontSize - 50) * 0.5 / 100;
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--container-font-size', `${actualFontSize}rem`);
+    }
+
+    // Mark theme adjustment to keep panels open
+    markThemeAdjustment();
   };
 
   return (
@@ -93,7 +102,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         rightPanelOpen ? 'translate-x-0' : 'translate-x-[110%]'
       }`}
     >
-      <div className="space-y-4 overflow-y-auto overflow-x-hidden">
+      <div className="space-y-4 overflow-y-auto overflow-x-hidden scrollbar-hide">
         
         {/* Settings header to match New Chat level */}
         <div className="flex gap-2 mb-3">
@@ -216,8 +225,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
                             await Promise.all([fetchActiveKeys(), fetchModels()]);
                           } catch (error: any) {
-                            console.error('Error saving API key:', error);
-                            alert(`Error saving API key: ${error.message}`);
+                                  console.error('Error saving API key:', error);
+      // TODO: Replace with proper toast notification in production
+      if (process.env.NODE_ENV === 'development') {
+        alert(`Error saving API key: ${error.message}`);
+      }
                           }
                         }}
                         className="flex-1 px-4 py-2 text-white rounded-lg transition-colors container-font"
@@ -252,8 +264,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             });
                             await Promise.all([fetchActiveKeys(), fetchModels()]);
                           } catch (error: any) {
-                            console.error('Error deleting API key:', error);
-                            alert(`Error deleting API key: ${error.message}`);
+                                  console.error('Error deleting API key:', error);
+      // TODO: Replace with proper toast notification in production
+      if (process.env.NODE_ENV === 'development') {
+        alert(`Error deleting API key: ${error.message}`);
+      }
                           }
                         }}
                         className="px-4 py-2 text-white bg-red-600/80 hover:bg-red-600 rounded-lg transition-colors container-font"
@@ -285,8 +300,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       setSelectedColor(e.target.value);
                       changeTheme(e.target.value, gradientType);
                     }}
-                    className="w-12 h-8 rounded-lg border border-teal-800/40 cursor-pointer"
-                    style={{ backgroundColor: selectedColor }}
+                    className="rounded-full border-none p-0 appearance-none cursor-pointer"
+                    style={{ backgroundColor: selectedColor, width: '14px', height: '14px' }}
                   />
                 </div>
                 <div className="flex-1">

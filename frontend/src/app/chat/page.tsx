@@ -8,6 +8,7 @@ import MessageList from '../../components/chat/MessageList';
 import ChatInputArea from '../../components/chat/ChatInputArea';
 import ChatHistoryPanel, { ChatMeta } from '../../components/chat/ChatHistoryPanel';
 import SettingsPanel from '../../components/chat/SettingsPanel';
+import MobileChatLayout from '../../components/chat/MobileChatLayout';
 import { fetchWithAuth } from '../../utils/fetchWithAuth';
 
 // --- EASY UI CUSTOMIZATION ---
@@ -33,14 +34,21 @@ export default function ChatPage() {
   // --- HOOKS ---
   // All hooks are now declared at the top level, in the same order on every render.
   const { isLoaded, userId, getToken } = useAuth();
+  
+  // Detect mobile on first render (SSR safe) so UI state is correct before initial paint
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 1024; // lg breakpoint – keep in sync with CSS media query
+  });
+  
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [inputText, setInputText] = useState('');
-  const [selectedModel, setSelectedModel] = useState('google/gemini-2.5-flash-preview-05-20'); // Default to first default model
-  const [selectedColor, setSelectedColor] = useState('#1a4a4a');
-  const [gradientType, setGradientType] = useState('linear-diagonal');
-  const [containerOpacity, setContainerOpacity] = useState(80);
+  const [selectedModel, _setSelectedModel] = useState('google/gemini-2.5-flash-preview-05-20'); // Default to first default model
+  const [selectedColor, setSelectedColor] = useState('#08615a');
+  const [gradientType, setGradientType] = useState('solid');
+  const [containerOpacity, setContainerOpacity] = useState(0);
   const [fontSize, setFontSize] = useState(100);
   const [apiKeys, setApiKeys] = useState<{[key: string]: string}>({});
   const [showApiKey, setShowApiKey] = useState<{[key: string]: boolean}>({});
@@ -58,12 +66,62 @@ export default function ChatPage() {
   const [chats, setChats] = useState<ChatMeta[]>([]);
   // Ref to keep track of the polling interval so we can clear it on unmount
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // === NEW: refs to debounce theme persistence for opacity & font size ===
+  const opacityUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fontSizeUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // === NEW: Track when user is actively adjusting theme settings ===
+  const [isAdjustingTheme, setIsAdjustingTheme] = useState(false);
+  const themeAdjustmentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // WebSocket connection for real-time chat
   const { isConnected, hasJoined, messages, sendMessage, isTyping, isProcessing, error, resetMessages, setMessages } = useWebSocket(currentChatId);
 
   // Width (in pixels) of the invisible edge hover area that auto-opens the panels.
   const HOVER_ZONE_WIDTH = 200;
+
+  // === Default Model Persistence ===
+  const fetchDefaultModel = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const response = await fetchWithAuth(getToken, '/api/user/default-model', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response) return;
+      if (!response.ok) throw new Error('Failed to fetch default model');
+      const data = await response.json();
+      if (data.model) {
+        _setSelectedModel(data.model);
+      }
+    } catch (err) {
+      // console.error('Error fetching default model', err);
+    }
+  }, [getToken]);
+
+  const saveDefaultModel = useCallback(async (modelId: string) => {
+    try {
+      await fetchWithAuth(getToken, '/api/user/default-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelId }),
+      });
+    } catch (err) {
+      // console.error('Error saving default model', err);
+    }
+  }, [getToken]);
+
+  const handleSelectModel = useCallback((modelId: string) => {
+    _setSelectedModel(modelId);
+    saveDefaultModel(modelId);
+  }, [saveDefaultModel]);
+
+  // Load saved model on initial mount
+  useEffect(() => {
+    if (isLoaded) {
+      fetchDefaultModel();
+    }
+  }, [isLoaded, fetchDefaultModel]);
 
   // --- DATA FETCHING FUNCTIONS ---
   const fetchApiKeys = useCallback(async () => {
@@ -187,12 +245,77 @@ export default function ChatPage() {
     }
   }, [getToken, changeTheme]);
 
+  // Add loading state for chat switching
+  const [isLoadingChat, setIsLoadingChat] = useState(false);
+
   // Insert handleSelectChat after hook definitions, e.g., after fetchMessageCount or fetchChats definitions but before side effects.
-  const handleSelectChat = useCallback((chatId: string) => {
+  const handleSelectChat = useCallback(async (chatId: string) => {
     if (chatId === currentChatId) return;
+
+    // Show loading spinner & clear current view immediately to avoid bleed
+    setIsLoadingChat(true);
+    resetMessages();
+
+    // Switch chatId so WebSocket joins the new room ASAP
     setCurrentChatId(chatId);
-    resetMessages(); // Clear messages immediately, useEffect will load new ones
-  }, [currentChatId, resetMessages]);
+
+    try {
+      const token = await getToken();
+      const response = await fetchWithAuth(getToken, `/api/chats/${chatId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response && response.ok) {
+        const data = await response.json();
+        const parsedMsgs = JSON.parse(data.chat.messages || '[]').map((m: any, idx: number) => ({
+          id: `${chatId}-${idx}`,
+          role: m.role,
+          ...(() => {
+            if (m.reasoning) return { content: m.content, reasoning: m.reasoning };
+            if (typeof m.content === 'string' && m.content.includes('__REASONING__')) {
+              const segments = m.content.split('__REASONING__');
+              const answer = segments.shift() || '';
+              const reasoningCollected = segments.join('');
+              return { content: answer, reasoning: reasoningCollected };
+            }
+            return { content: m.content };
+          })(),
+          ...(m.audio ? { audio: m.audio } : {}),
+          ...(m.attachments ? { attachments: m.attachments } : {}),
+          ...(m.model ? { model: m.model } : {}),
+          streaming: false,
+          reasoningOpen: false,
+          timestamp: Date.now(),
+        }));
+
+        setMessages(parsedMsgs);
+      }
+    } catch (err) {
+      console.error('Error loading chat history:', err);
+    } finally {
+      setIsLoadingChat(false);
+    }
+  }, [currentChatId, getToken, resetMessages, setMessages]);
+
+  // === NEW: Helper to track theme adjustment activity ===
+  const markThemeAdjustment = useCallback(() => {
+    setIsAdjustingTheme(true);
+    // Only force panels open on desktop. On mobile we leave them closed.
+    if (!isMobile) {
+      setLeftPanelOpen(true);
+      setRightPanelOpen(true);
+    }
+    
+    // Clear existing timeout
+    if (themeAdjustmentTimeoutRef.current) {
+      clearTimeout(themeAdjustmentTimeoutRef.current);
+    }
+    
+    // Set new timeout to stop tracking after 2 seconds of inactivity
+    themeAdjustmentTimeoutRef.current = setTimeout(() => {
+      setIsAdjustingTheme(false);
+    }, 2000);
+  }, [isMobile]);
 
   // --- SIDE EFFECTS ---
   // useEffects are called after the main state hooks.
@@ -220,6 +343,9 @@ export default function ChatPage() {
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
+      }
+      if (themeAdjustmentTimeoutRef.current) {
+        clearTimeout(themeAdjustmentTimeoutRef.current);
       }
     };
   }, []);
@@ -253,6 +379,76 @@ export default function ChatPage() {
     });
   }, [currentChatId]);
 
+  // === NEW: Persist container opacity changes & update CSS ===
+  useEffect(() => {
+    // Map slider (0-100) to actual opacity (0.9 → 0.1)
+    const actualOpacity = 0.9 - (containerOpacity * 0.8) / 100;
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--container-opacity', actualOpacity.toString());
+    }
+
+    // Mark that user is adjusting theme settings
+    markThemeAdjustment();
+
+    // Debounce network persistence to avoid spamming while sliding
+    if (opacityUpdateRef.current) clearTimeout(opacityUpdateRef.current);
+    opacityUpdateRef.current = setTimeout(() => {
+      if (!userId) return;
+      getToken().then(token =>
+        fetchWithAuth(getToken, '/api/user/theme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            color: selectedColor,
+            gradientType,
+            containerOpacity,
+            fontSize,
+          }),
+        }).catch(console.error)
+      );
+    }, 300);
+
+    // Cleanup debounce timer on unmount/change
+    return () => {
+      if (opacityUpdateRef.current) clearTimeout(opacityUpdateRef.current);
+    };
+  }, [containerOpacity, selectedColor, gradientType, fontSize, getToken, userId, markThemeAdjustment]);
+
+  // === NEW: Persist font size changes & update CSS ===
+  useEffect(() => {
+    // Map slider (50-150) to rem size (0.75 → 1.25)
+    const actualFontSize = 0.75 + (fontSize - 50) * 0.5 / 100;
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--container-font-size', `${actualFontSize}rem`);
+    }
+
+    // Mark that user is adjusting theme settings
+    markThemeAdjustment();
+
+    // Debounce network persistence
+    if (fontSizeUpdateRef.current) clearTimeout(fontSizeUpdateRef.current);
+    fontSizeUpdateRef.current = setTimeout(() => {
+      if (!userId) return;
+      getToken().then(token =>
+        fetchWithAuth(getToken, '/api/user/theme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            color: selectedColor,
+            gradientType,
+            containerOpacity,
+            fontSize,
+          }),
+        }).catch(console.error)
+      );
+    }, 300);
+
+    // Cleanup
+    return () => {
+      if (fontSizeUpdateRef.current) clearTimeout(fontSizeUpdateRef.current);
+    };
+  }, [fontSize, selectedColor, gradientType, containerOpacity, getToken, userId, markThemeAdjustment]);
+
   // === Helper: generate a readable title from message ===
   const generateTitle = (text: string) => {
     if (!text) return 'New Chat';
@@ -281,7 +477,7 @@ export default function ChatPage() {
   };
 
   // Send message function
-  interface AttachmentMeta { id: string; name: string; type: string; url: string; }
+  interface AttachmentMeta { id: string; name: string; type: string; url: string; base64?: string; }
   const handleSendMessage = (messageData: string | { text: string; attachments: AttachmentMeta[] }) => {
     if (!isConnected) return;
     
@@ -341,6 +537,9 @@ export default function ChatPage() {
   function changeTheme(color: string, gradType = gradientType) {
     const background = getBackground(color, gradType);
     
+    // Mark that user is adjusting theme settings
+    markThemeAdjustment();
+    
     const style = document.createElement('style');
     style.innerHTML = `
       body { background: ${background} !important; background-attachment: fixed; }
@@ -380,9 +579,10 @@ export default function ChatPage() {
   // mid-stream the server will subsequently emit a `stream-progress` event
   // which appends to the assistant message rather than being overwritten by
   // a late history fetch.
+  // Load initial chat history only on first mount
   useEffect(() => {
-    const loadChatHistory = async () => {
-      if (!currentChatId || !userId) return;
+    const loadInitialChatHistory = async () => {
+      if (!currentChatId || !userId || isLoadingChat || messages.length > 0) return;
       
       try {
         const token = await getToken();
@@ -390,60 +590,73 @@ export default function ChatPage() {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        if (response) {
-          if (response.ok) {
-            const data = await response.json();
-            const parsedMsgs = JSON.parse(data.chat.messages || '[]').map((m: any, idx: number) => ({
-              id: `${currentChatId}-${idx}`,
-              role: m.role,
-              ...(() => {
-                if (m.reasoning) {
-                  return { content: m.content, reasoning: m.reasoning };
-                }
-                if (typeof m.content === 'string' && m.content.includes('__REASONING__')) {
-                  const segments = m.content.split('__REASONING__');
-                  const answer = segments.shift() || '';
-                  const reasoningCollected = segments.join('');
-                  return { content: answer, reasoning: reasoningCollected };
-                }
-                return { content: m.content };
-              })(),
-              ...(m.audio ? { audio: m.audio } : {}),
-              ...(m.attachments ? { attachments: m.attachments } : {}),
-              reasoningOpen: false,
-              timestamp: Date.now()
-            }));
+        if (response && response.ok) {
+          const data = await response.json();
+          const parsedMsgs = JSON.parse(data.chat.messages || '[]').map((m: any, idx: number) => ({
+            id: `${currentChatId}-${idx}`,
+            role: m.role,
+            ...(() => {
+              if (m.reasoning) {
+                return { content: m.content, reasoning: m.reasoning };
+              }
+              if (typeof m.content === 'string' && m.content.includes('__REASONING__')) {
+                const segments = m.content.split('__REASONING__');
+                const answer = segments.shift() || '';
+                const reasoningCollected = segments.join('');
+                return { content: answer, reasoning: reasoningCollected };
+              }
+              return { content: m.content };
+            })(),
+            ...(m.audio ? { audio: m.audio } : {}),
+            ...(m.attachments ? { attachments: m.attachments } : {}),
+            ...(m.model ? { model: m.model } : {}),
+            streaming: false,
+            reasoningOpen: false,
+            timestamp: Date.now()
+          }));
 
-            // If we already have an assistant message (stream-progress) keep it and
-            // prepend the historical messages in case they are missing.
-            setMessages(prev => {
-              if (prev.length === 0) {
-                return parsedMsgs;
-              }
-              // Determine if the last message is an assistant stream not yet in history.
-              const lastPrev = prev[prev.length - 1];
-              const historyHasAssistant = parsedMsgs.some((pm: any) => pm.role === 'assistant');
-              if (lastPrev.role === 'assistant' && !historyHasAssistant) {
-                return [...parsedMsgs, lastPrev];
-              }
-              return prev;
-            });
-          }
+          setMessages(parsedMsgs);
         }
       } catch (err) {
-        console.error('Error loading chat history:', err);
+        console.error('Error loading initial chat history:', err);
       }
     };
     
-    loadChatHistory();
-  }, [currentChatId, userId, getToken, setMessages]);
+    loadInitialChatHistory();
+  }, [currentChatId, userId, getToken, setMessages, isLoadingChat, messages.length]);
 
   // --- Chat history actions passed to ChatHistoryPanel ---
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     const newId = `chat_${Date.now()}`;
+
+    let backendReady = false;
+    try {
+      const token = await getToken();
+      const res = await fetchWithAuth(getToken, '/api/chats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ chatId: newId, model: selectedModel }),
+      });
+      backendReady = !!res && res.ok;
+    } catch (err) {
+      console.warn('New chat init failed (will retry on first message):', err);
+    }
+
+    // Proceed regardless (fallback: backend will create on first message via WS)
     setCurrentChatId(newId);
-    setChats((prev) => [...prev, { id: newId, title: 'New Chat', created: Date.now() }].sort((a,b)=>b.created-a.created));
-    resetMessages();
+    setChats((prev) =>
+      [...prev, { id: newId, title: 'New Chat', created: Date.now() }].sort((a, b) => b.created - a.created)
+    );
+    if (!backendReady) {
+      // Avoid 404 loop: skip history fetch until backend confirms creation.
+      // We mark messages reset after a tiny delay giving WS a chance to join.
+      setTimeout(() => resetMessages(), 0);
+    } else {
+      resetMessages();
+    }
   };
 
   const handleRenameChat = async (chatId: string, newTitle: string) => {
@@ -531,6 +744,25 @@ export default function ChatPage() {
     }
   };
 
+  // Keep `isMobile` state in sync with viewport size (and close panels on shrink)
+  useEffect(() => {
+    const checkViewport = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+
+      if (mobile) {
+        setLeftPanelOpen(false);
+        setRightPanelOpen(false);
+      }
+    };
+
+    // Run once on mount
+    checkViewport();
+
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
+
   // --- CONDITIONAL RENDER ---
   // This now happens *after* all hooks have been called.
   if (!isLoaded || !userId) {
@@ -538,6 +770,70 @@ export default function ChatPage() {
   }
 
   // --- MAIN RENDER ---
+  // Mobile layout for screens < 1024px
+  if (isMobile) {
+    return (
+      <MobileChatLayout
+        leftPanelOpen={leftPanelOpen}
+        rightPanelOpen={rightPanelOpen}
+        setLeftPanelOpen={setLeftPanelOpen}
+        setRightPanelOpen={setRightPanelOpen}
+        
+        messages={messages}
+        isTyping={isTyping}
+        isProcessing={isProcessing}
+        isLoadingChat={isLoadingChat}
+        currentChatId={currentChatId}
+        setMessages={setMessages}
+        
+        inputText={inputText}
+        setInputText={setInputText}
+        handleSendMessage={handleSendMessage}
+        isConnected={isConnected}
+        isRecording={isRecording}
+        setIsRecording={setIsRecording}
+        hasJoined={hasJoined}
+        
+        models={models}
+        activeApiKeys={activeApiKeys}
+        selectedModel={selectedModel}
+        setSelectedModel={handleSelectModel}
+        messageCount={messageCount}
+        messageLimit={messageLimit}
+        
+        chats={chats}
+        onSelectChat={handleSelectChat}
+        onNewChat={handleNewChat}
+        onRenameChat={handleRenameChat}
+        onDeleteChat={handleDeleteChat}
+        onBranchChat={handleBranchChat}
+        
+        configuringProvider={configuringProvider}
+        setConfiguringProvider={setConfiguringProvider}
+        apiKeys={apiKeys}
+        setApiKeys={setApiKeys}
+        showApiKey={showApiKey}
+        setShowApiKey={setShowApiKey}
+        getToken={getToken}
+        fetchActiveKeys={fetchActiveKeys}
+        fetchModels={fetchModels}
+        selectedColor={selectedColor}
+        setSelectedColor={setSelectedColor}
+        gradientType={gradientType}
+        setGradientType={setGradientType}
+        containerOpacity={containerOpacity}
+        setContainerOpacity={setContainerOpacity}
+        fontSize={fontSize}
+        setFontSize={setFontSize}
+        changeTheme={changeTheme}
+        markThemeAdjustment={markThemeAdjustment}
+        
+        starterSuggestions={STARTER_SUGGESTIONS}
+      />
+    );
+  }
+
+  // Desktop layout for screens >= 1024px
   return (
     <div className="h-screen">
       {/* Header */}
@@ -546,14 +842,6 @@ export default function ChatPage() {
           xpochat
         </h1>
         <div className="flex items-center gap-4">
-          {/* Connection Status */}
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
-            <span className="text-xs text-gray-400">
-              {isConnected ? 'Connected' : error || 'Connecting...'}
-            </span>
-          </div>
-          
           <div className="w-8 h-8 [&>button]:w-full [&>button]:h-full">
             <UserButton 
               afterSignOutUrl="/" 
@@ -612,8 +900,8 @@ export default function ChatPage() {
               getToken={getToken}
             />
 
-            {/* Welcome overlay */}
-            {messages.length === 0 && (
+            {/* Welcome overlay - only show for truly empty chats, not during loading */}
+            {messages.length === 0 && !isLoadingChat && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
                 <div className="pointer-events-auto max-w-lg">
                   <h2 className="text-4xl sm:text-5xl font-light text-teal-300 mb-4">Welcome to Xpochat</h2>
@@ -632,6 +920,13 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
+
+            {/* Loading overlay during chat switching */}
+            {isLoadingChat && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
           </div>
           {/* Input Area */}
           <ChatInputArea
@@ -644,7 +939,7 @@ export default function ChatPage() {
             models={models}
             activeApiKeys={activeApiKeys}
             selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
+            setSelectedModel={handleSelectModel}
             messageCount={messageCount}
             messageLimit={messageLimit}
             isProcessing={isProcessing}
@@ -664,7 +959,7 @@ export default function ChatPage() {
         onNewChat={handleNewChat}
         onRenameChat={handleRenameChat}
         onDeleteChat={handleDeleteChat}
-        onClose={() => setLeftPanelOpen(false)}
+        onClose={() => !isAdjustingTheme && setLeftPanelOpen(false)}
       />
       
       {/* Right Sliding Panel */}
@@ -690,12 +985,13 @@ export default function ChatPage() {
         fontSize={fontSize}
         setFontSize={setFontSize}
         changeTheme={changeTheme}
-        onClose={() => setRightPanelOpen(false)}
+        markThemeAdjustment={markThemeAdjustment}
+        onClose={() => !isAdjustingTheme && setRightPanelOpen(false)}
       />
 
       {/* --- Hover Zones for Auto-Opening Panels --- */}
       {/* Render only when the corresponding panel is closed to avoid accidental re-open loops */}
-      {!leftPanelOpen && (
+      {!leftPanelOpen && !isAdjustingTheme && (
         <div
           className="fixed left-0 top-0 bottom-0 z-10"
           style={{ width: HOVER_ZONE_WIDTH }}
@@ -703,7 +999,7 @@ export default function ChatPage() {
         />
       )}
 
-      {!rightPanelOpen && (
+      {!rightPanelOpen && !isAdjustingTheme && (
         <div
           className="fixed right-0 top-0 bottom-0 z-10"
           style={{ width: HOVER_ZONE_WIDTH }}

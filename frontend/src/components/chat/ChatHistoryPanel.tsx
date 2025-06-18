@@ -82,7 +82,8 @@ const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
       const c = chats[i];
       map.set(c.id, c);
     }
-    return Array.from(map.values());
+    // Ensure newest chats appear first
+    return Array.from(map.values()).sort((a, b) => b.created - a.created);
   }, [chats]);
 
   const filteredChats = uniqueChats.filter((chat) =>
@@ -106,8 +107,8 @@ const ChatHistoryPanel: React.FC<ChatHistoryPanelProps> = ({
       <div className="flex gap-2 mb-3">
         <button
           onClick={onNewChat}
-          style={{ backgroundColor: 'rgba(var(--teal-primary-rgb, 20, 184, 166), 0.3)', color: 'rgb(var(--teal-primary-rgb, 20, 184, 166))' }}
-          className="flex-1 py-2 rounded-lg hover:bg-opacity-50 transition-colors text-sm font-medium"
+          style={{ borderColor: 'rgba(var(--teal-primary-rgb,20,184,166),0.6)' }}
+          className="flex-1 py-2 rounded-lg bg-black/30 hover:bg-black/50 text-gray-300 transition-colors text-sm font-medium border"
         >
           New Chat
         </button>

@@ -1,16 +1,16 @@
 ﻿@import "tailwindcss";
 
 :root {
-  --background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 30%, #0f2f2f 60%, #1a4a4a 100%);
+  --background: #08615a;
   --foreground: #ededed;
   --container-bg: rgba(26, 26, 26, 0.8);
   --container-border: rgba(26, 74, 74, 0.3);
-  --teal-primary: #1a4a4a;
+  --teal-primary: #00615a;
   --teal-secondary: #0f2f2f;
   --dark-primary: #0a0a0a;
   --dark-secondary: #1a1a1a;
-  --teal-primary-rgb: 20, 184, 166;
-  --container-opacity: 0.26;
+  --teal-primary-rgb: 8, 97, 90;
+  --container-opacity: 0.9;
   --container-font-size: 1rem;
 }
 
@@ -318,4 +318,62 @@ h1, h2, h3, h4, h5, h6 {
 /* Edge/IE specific fixes */
 .custom-select::-ms-expand {
   display: none;
+}
+
+/* Markdown table styling - ensure tables use full width and look good */
+.prose table {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  display: table;
+}
+
+.prose thead {
+  background-color: rgba(var(--teal-primary-rgb, 20, 184, 166), 0.1);
+}
+
+.prose th {
+  border: 1px solid rgba(var(--teal-primary-rgb, 20, 184, 166), 0.3) !important;
+  padding: 0.75rem !important;
+  text-align: left;
+  font-weight: 600;
+  color: rgb(var(--teal-primary-rgb, 20, 184, 166)) !important;
+  background-color: rgba(var(--teal-primary-rgb, 20, 184, 166), 0.05);
+}
+
+.prose td {
+  border: 1px solid rgba(156, 163, 175, 0.3) !important;
+  padding: 0.75rem !important;
+  color: #e5e7eb !important;
+}
+
+.prose tbody tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.prose tbody tr:hover {
+  background-color: rgba(var(--teal-primary-rgb, 20, 184, 166), 0.05);
+}
+
+/* Ensure prose containers don't constrain width */
+.prose {
+  max-width: none !important;
+}
+
+/* Table responsive wrapper for mobile */
+.prose table {
+  min-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .prose table {
+    font-size: 0.875rem;
+  }
+  
+  .prose th,
+  .prose td {
+    padding: 0.5rem !important;
+  }
 }

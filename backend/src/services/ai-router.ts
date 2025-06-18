@@ -168,7 +168,7 @@ const handleOpenAICompatibleStream = async (
 
         // Save the complete message history including the assistant's response and reasoning (if any)
         if (streamSuccessful && answerBuffer) {
-            const assistantMsg: Record<string, any> = { role: 'assistant', content: answerBuffer };
+            const assistantMsg: Record<string, any> = { role: 'assistant', content: answerBuffer, model };
             if (reasoningBuffer) assistantMsg.reasoning = reasoningBuffer;
 
             const updatedMessages = [...originalMessages, assistantMsg];
@@ -297,7 +297,7 @@ const handleGoogleCompletion = async (
         }
 
         const fullResponse = await dragonflydb.finishStreaming(chatId);
-        const updatedMessages = [...originalMessages, { role: 'assistant', content: fullResponse }];
+        const updatedMessages = [...originalMessages, { role: 'assistant', content: fullResponse, model }];
         const chatUpdates: Record<string, string> = { messages: JSON.stringify(updatedMessages) };
         const { title: currentTitle } = await dragonflydb.getChatState(chatId);
         if (!currentTitle || currentTitle === 'New Chat') {
@@ -514,7 +514,7 @@ export const routeChat = async (userId: string, chatId: string, attachments?: Ar
             const fullResponse = await dragonflydb.finishStreaming(chatId);
             // Save trial limit message to history
             if (fullResponse) {
-                const updatedMessages = [...messages, { role: 'assistant', content: fullResponse }];
+                const updatedMessages = [...messages, { role: 'assistant', content: fullResponse, model }];
                 await dragonflydb.updateChatState(chatId, {
                     messages: JSON.stringify(updatedMessages)
                 });

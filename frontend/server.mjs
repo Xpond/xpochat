@@ -58,13 +58,17 @@ app.prepare().then(() => {
         backendWs.on('error', cleanup);
       });
     } catch (err) {
-      console.error('WebSocket proxy error:', err);
+      if (dev) {
+        console.error('WebSocket proxy error:', err);
+      }
       socket.destroy();
     }
   });
 
   server.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port} [${dev ? 'dev' : 'prod'}]`);
+      console.log(`> Ready on http://localhost:${port} [${dev ? 'dev' : 'prod'}]`);
+  if (dev) {
     console.log(`> WS proxy → ${BACKEND_WS_URL}`);
+  }
   });
 }); 

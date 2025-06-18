@@ -74,12 +74,12 @@ export default function ModelSelector({
     <div ref={containerRef} className={`relative ${className}`}>
       <button
         onClick={() => setOpen((p) => !p)}
-        className="px-3 py-2 bg-teal-800/30 text-teal-300 rounded-lg hover:bg-teal-800/50 transition-colors text-base"
+        className="px-3 py-2 bg-teal-800/30 text-teal-300 rounded-lg hover:bg-teal-800/50 transition-colors text-sm w-full truncate"
       >
         {displayNameForModel()}
       </button>
       {open && (
-        <div className="absolute bottom-full mb-2 right-0 w-[36rem] bg-black/60 backdrop-blur-md border border-teal-800/30 rounded-lg shadow-xl overflow-hidden z-50 flex flex-col max-h-[70vh]">
+        <div className="absolute bottom-full mb-2 right-0 w-[calc(100vw-2rem)] max-w-[36rem] bg-black/60 backdrop-blur-md border border-teal-800/30 rounded-lg shadow-xl overflow-hidden z-50 flex flex-col max-h-[70vh]">
           {/* Search bar */}
           <div className="p-3 border-b border-teal-800/30 bg-black/70 sticky top-0">
             <input

@@ -16,6 +16,19 @@ export async function DELETE(request: NextRequest) {
   return handleProxyRequest(request, 'DELETE');
 }
 
+export async function OPTIONS(request: NextRequest) {
+  // Handle CORS preflight requests by echoing requested headers/methods and returning 204 quickly.
+  const headers = new Headers();
+  const reqHeaders = request.headers;
+  const allowHeaders = reqHeaders.get("access-control-request-headers") || "Authorization, Content-Type";
+  const allowMethod = reqHeaders.get("access-control-request-method") || "GET,POST,PUT,DELETE,OPTIONS";
+  headers.set("Access-Control-Allow-Origin", reqHeaders.get("origin") || "*");
+  headers.set("Access-Control-Allow-Headers", allowHeaders);
+  headers.set("Access-Control-Allow-Methods", allowMethod);
+  headers.set("Access-Control-Max-Age", "86400");
+  return new Response(null, { status: 204, headers });
+}
+
 async function handleProxyRequest(request: NextRequest, method: string) {
   // Get and validate the path to proxy from the query parameter
   const { searchParams } = new URL(request.url);
@@ -48,36 +61,33 @@ async function handleProxyRequest(request: NextRequest, method: string) {
 
   // Debug: log what URL we are about to fetch in production. Remove or comment out once issue is fixed.
   if (!isDev) {
-    console.log('[proxy] backendBaseUrl=', backendBaseUrl, 'path=', path);
+    // Removed console.log for production security - do not expose internal URLs
   }
 
   const backendUrl = `${backendBaseUrl}${path}`;
 
   try {
-    // Forward the request to the backend
+    const originalHeaders = new Headers(request.headers);
+    // Remove headers that Node's fetch will set automatically or that could cause issues
+    originalHeaders.delete('host');
+
+    // Ensure auth header is forwarded (may already exist on originalHeaders)
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && !originalHeaders.has('authorization')) {
+      originalHeaders.set('authorization', authHeader);
+    }
+
     const requestInit: RequestInit = {
       method,
-      cache: "no-store",
-      headers: {
-        'Content-Type': 'application/json',
-        // Forward authorization header if present
-        ...(request.headers.get('authorization') && {
-          'Authorization': request.headers.get('authorization')!
-        }),
-      },
-    };
+      cache: 'no-store',
+      headers: originalHeaders,
+      // For GET and HEAD, the body should be undefined; for others, forward the raw body stream.
+      body: method === 'GET' || method === 'HEAD' ? undefined : (request as any).body,
+      // Explicitly allow streaming of larger payloads (file uploads)
+      duplex: 'half',
+    } as RequestInit & { duplex?: 'half' };
 
-    // Add body for POST/PUT requests
-    if (method === 'POST' || method === 'PUT') {
-      try {
-        const body = await request.text();
-        if (body) {
-          requestInit.body = body;
-        }
-      } catch (error) {
-        // No body is fine for some requests
-      }
-    }
+    // Note: Next.js might freeze the body after reading, so avoid consuming it before forwarding.
 
     const backendRes = await fetch(backendUrl, requestInit);
 
@@ -96,7 +106,10 @@ async function handleProxyRequest(request: NextRequest, method: string) {
       headers,
     });
   } catch (error) {
-    console.error("Proxy error:", error);
+    // Only log errors in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error("Proxy error:", error);
+    }
     return new Response(
       JSON.stringify({ error: "Unable to reach backend" }),
       {

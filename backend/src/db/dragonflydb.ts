@@ -315,6 +315,24 @@ class DragonflyDBManager {
     return newCount;
   }
 
+  async getUserDefaultModel(userId: string): Promise<string | null> {
+    const key = `user:${userId}:default-model`;
+    if (this.fallbackMode) {
+      return this.fallbackStore.get(key) || null;
+    }
+    return await this.client.get(key);
+  }
+
+  async setUserDefaultModel(userId: string, model: string): Promise<void> {
+    const key = `user:${userId}:default-model`;
+    if (this.fallbackMode) {
+      this.fallbackStore.set(key, model);
+    } else {
+      await this.client.set(key, model);
+    }
+    log.debug('User default model saved', { userId, model, fallback: this.fallbackMode });
+  }
+
   get isConnected() { return this.connected || this.fallbackMode; }
   get isFallback() { return this.fallbackMode; }
   get raw() { return this.client; }

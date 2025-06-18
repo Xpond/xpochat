@@ -203,6 +203,30 @@ apiRouter.post('/chats/branch', async (req: Request, res: Response) => {
   }
 });
 
+// Create a new empty chat
+apiRouter.post('/chats', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { chatId, model } = req.body;
+
+    if (!chatId || typeof chatId !== 'string') {
+      return res.status(400).json({ error: 'chatId is required' });
+    }
+
+    // Prevent overwriting existing chat
+    const existing = await dragonflydb.getChatState(chatId);
+    if (existing && existing.userId) {
+      return res.status(400).json({ error: 'Chat already exists' });
+    }
+
+    await dragonflydb.initChat(userId, chatId, model);
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('Failed to create chat', err);
+    res.status(500).json({ error: 'Failed to create chat' });
+  }
+});
+
 // === File Upload Configuration ===
 // Ensure uploads directory exists at project root (process.cwd())
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -504,6 +528,35 @@ app.post('/api/user/theme', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Error saving user theme:', error);
     res.status(500).json({ error: 'Failed to save theme' });
+  }
+});
+
+// === Default model preference endpoints ===
+app.get('/api/user/default-model', authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const saved = await dragonflydb.getUserDefaultModel(userId);
+    res.json({ model: saved || DEFAULT_MODELS[0].id });
+  } catch (error) {
+    console.error('Error fetching user default model:', error);
+    res.status(500).json({ error: 'Failed to fetch default model' });
+  }
+});
+
+app.post('/api/user/default-model', authMiddleware, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { model } = req.body;
+
+    if (!model || typeof model !== 'string') {
+      return res.status(400).json({ error: 'model is required' });
+    }
+
+    await dragonflydb.setUserDefaultModel(userId, model);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving user default model:', error);
+    res.status(500).json({ error: 'Failed to save default model' });
   }
 });
 

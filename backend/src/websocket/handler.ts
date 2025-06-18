@@ -92,6 +92,11 @@ class WebSocketHandler {
         try {
           await existingSub.client.unsubscribe(`chat:${existingSub.chatId}:tokens`);
           await existingSub.client.quit();
+          log.debug('Cleaned up previous Redis subscription', { 
+            connectionId, 
+            previousChatId: existingSub.chatId, 
+            newChatId: chatId 
+          });
         } catch (err) {
           log.warn('Failed to clean up previous Redis subscription', { err });
         }
@@ -153,6 +158,11 @@ class WebSocketHandler {
      if (chatState.streaming === 'true') {
        const streamBuffer = await dragonflydb.getStream(chatId);
        if (streamBuffer) {
+         log.debug('Sending stream progress for resumed chat', { 
+           chatId, 
+           bufferLength: streamBuffer.length,
+           connectionId 
+         });
          this.sendToConnection(connectionId, {
            type: 'stream-progress',
            chatId,

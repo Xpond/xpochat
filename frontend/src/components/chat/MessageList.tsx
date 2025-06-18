@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm'; // GitHub Flavored Markdown (tables, strikethrough, task lists)
 import MessageActions from './MessageActions';
 
 // Local message type identical to the one used in ChatPage
@@ -13,6 +14,8 @@ export interface ChatMessage {
   reasoningOpen?: boolean;
   audio?: string; // assistant TTS audio data URL
   attachments?: Array<{ id: string; name: string; type: string; url?: string; base64?: string }>;
+  model?: string;
+  streaming?: boolean;
   timestamp: number;
 }
 
@@ -78,7 +81,7 @@ const MessageList: React.FC<MessageListProps> = ({
 
           <div className={`w-full ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
             {msg.role === 'assistant' ? (
-              <div className={`prose prose-invert prose-sm max-w-none text-lg text-gray-100`}>
+              <div className={`prose prose-invert prose-sm !max-w-none w-full text-lg text-gray-100`}>
                 {/* Reasoning Section - Only show if reasoning exists */}
                 {msg.reasoning && (
                   <div 
@@ -117,8 +120,9 @@ const MessageList: React.FC<MessageListProps> = ({
                       </summary>
                       <div className="px-3 pb-3 pt-1 border-t border-teal-800/10">
                         {/* Render reasoning with full Markdown support and larger, readable font */}
-                        <div className="prose prose-invert text-sm sm:text-base leading-relaxed">
+                        <div className="prose prose-invert text-sm sm:text-base leading-relaxed !max-w-none w-full">
                           <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
                             components={{
                               code: ({ className, children, ...props }) => (
                                 <code
@@ -155,6 +159,7 @@ const MessageList: React.FC<MessageListProps> = ({
 
                 {/* Main Response */}
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
                     // Code blocks
                     code: ({ className, children, ...props }) => (
@@ -254,9 +259,13 @@ const MessageList: React.FC<MessageListProps> = ({
                 </ReactMarkdown>
               </div>
             ) : (
-              <div className="inline-block max-w-sm">
-                <div className="prose prose-invert prose-sm max-w-none text-lg text-gray-100">
-                  <ReactMarkdown>{typeof msg.content === 'string' ? msg.content : String(msg.content || '')}</ReactMarkdown>
+              <div className="inline-block w-full">
+                <div className="prose prose-invert prose-sm !max-w-none w-full text-lg text-gray-100">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                  >
+                    {typeof msg.content === 'string' ? msg.content : String(msg.content || '')}
+                  </ReactMarkdown>
                   {/* Render user attachments */}
                   {msg.attachments?.map(att => (
                     att.type.startsWith('audio/') ? (
@@ -282,15 +291,33 @@ const MessageList: React.FC<MessageListProps> = ({
               }`}
             >
               <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
-              <MessageActions
-                content={typeof msg.content === 'string' ? msg.content : String(msg.content || '')}
-                chatId={currentChatId}
-                messageIndex={index}
-                getToken={getToken}
-                onBranch={onBranchChat}
-                isAssistant={msg.role === 'assistant'}
-                messages={messages}
-              />
+
+              {/* Show model/provider info for assistant messages after streaming finishes */}
+              {msg.role === 'assistant' && !msg.streaming && msg.model && (
+                <span className="text-teal-400">
+                  {(() => {
+                    const parts = msg.model.split('/');
+                    if (parts.length === 1) return parts[0];
+                    // Provider is first segment; model name is last
+                    const provider = parts[0];
+                    const modelName = parts.slice(1).join('/');
+                    return `${modelName} (${provider})`;
+                  })()}
+                </span>
+              )}
+
+              {/* Action buttons only after streaming finished */}
+              {(!msg.streaming || msg.role === 'user') && (
+                <MessageActions
+                  content={typeof msg.content === 'string' ? msg.content : String(msg.content || '')}
+                  chatId={currentChatId}
+                  messageIndex={index}
+                  getToken={getToken}
+                  onBranch={onBranchChat}
+                  isAssistant={msg.role === 'assistant'}
+                  messages={messages}
+                />
+              )}
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import Link from 'next/link';
+import remarkGfm from 'remark-gfm';
 
 interface ChatMessage {
   id: string;
@@ -13,7 +14,7 @@ interface ChatMessage {
 }
 
 export default function SharedChatPage() {
-  const params = useParams();
+  const params = useParams() as { chatId?: string };
   const chatId = params.chatId as string;
   const [chat, setChat] = useState<any>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -125,9 +126,11 @@ export default function SharedChatPage() {
                 )}
 
                 <div className={`w-full ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                  <div className={`inline-block max-w-4xl ${msg.role === 'user' ? 'max-w-sm' : ''}`}>
-                    <div className="prose prose-invert prose-sm max-w-none text-lg text-gray-100">
-                      <ReactMarkdown>
+                              <div className={`inline-block w-full max-w-4xl`}>
+              <div className="prose prose-invert prose-sm !max-w-none w-full text-lg text-gray-100">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                      >
                         {typeof msg.content === 'string' ? msg.content : String(msg.content || '')}
                       </ReactMarkdown>
                     </div>
