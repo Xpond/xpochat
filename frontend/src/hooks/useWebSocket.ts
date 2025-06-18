@@ -201,85 +201,86 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
       };
 
       socket.onmessage = (event) => {
-        // console.log('[WebSocket] Message received:', event.data);
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'joined') {
-          // You can use this for confirmation, but isConnected is already true
-          // console.log(`[WebSocket] Successfully joined chat: ${data.chatId}`);
-          setHasJoined(true);
-        } else if (data.type === 'token' && data.chatId === chatIdRef.current) {
-          // Token for the currently active chat – begin/continue streaming
-          setIsProcessing(false);
-          enqueueChars(data.content);
-        } else if (data.type === 'reasoning' && data.chatId === chatIdRef.current) {
-          // Reasoning token for the active chat
-          setIsProcessing(false);
-          appendReasoningToMessage(data.content);
-        } else if (data.type === 'tts' && data.chatId === chatIdRef.current) {
-          // Attach audio to the last assistant message
-          setMessages(prev => {
-            if (prev.length === 0) return prev;
-            const last = prev[prev.length - 1];
-            if (last.role === 'assistant') {
-              const newMsg = { ...last, audio: data.audio };
-              // Auto-play
-              try {
-                const aud = new Audio(data.audio);
-                aud.play().catch(() => {});
-              } catch(_) {}
-              return [...prev.slice(0, -1), newMsg];
-            }
-            return prev;
-          });
-        } else if (data.type === 'typing' && data.chatId === chatIdRef.current) {
-          setIsTyping(data.isTyping);
-        } else if (data.type === 'error') {
-          setIsProcessing(false); // Stop processing on error
-          setError(data.message);
-        } else if (data.type === 'stream-progress' && data.chatId === chatIdRef.current) {
-          if (data.content) {
-            // The server's stream buffer may contain "__REASONING__" markers that
-            // separate the public answer from the hidden chain-of-thought.  We
-            // split them so that the UI can render the two parts correctly and
-            // we don't end up with literal marker text or duplicated reasoning.
-            const parts = data.content.split('__REASONING__');
-            const answerPart = parts.shift() || '';
-            const reasoningPart = parts.join(''); // may be empty if not present
-
-            setMessages(prev => {
-              const lastMsg = prev[prev.length - 1];
-
-              // Helper to merge into an assistant message (existing or new)
-              const mergeInto = (base: Message | null): Message => {
-                if (base) {
-                  return {
-                    ...base,
-                    content: answerPart || base.content,
-                    reasoning: reasoningPart ? ((base.reasoning || '') + reasoningPart) : base.reasoning,
-                    reasoningOpen: base.reasoningOpen ?? false,
-                  } as Message;
+        // Handle both string and Blob payloads
+        const handleMessage = (raw: string) => {
+          try {
+            const data = JSON.parse(raw);
+            
+            if (data.type === 'joined') {
+              setHasJoined(true);
+            } else if (data.type === 'token' && data.chatId === chatIdRef.current) {
+              setIsProcessing(false);
+              enqueueChars(data.content);
+            } else if (data.type === 'reasoning' && data.chatId === chatIdRef.current) {
+              setIsProcessing(false);
+              appendReasoningToMessage(data.content);
+            } else if (data.type === 'tts' && data.chatId === chatIdRef.current) {
+              // Attach audio to the last assistant message
+              setMessages(prev => {
+                if (prev.length === 0) return prev;
+                const last = prev[prev.length - 1];
+                if (last.role === 'assistant') {
+                  const newMsg = { ...last, audio: data.audio };
+                  try {
+                    const aud = new Audio(data.audio);
+                    aud.play().catch(() => {});
+                  } catch(_) {}
+                  return [...prev.slice(0, -1), newMsg];
                 }
-                return {
-                  id: Date.now().toString(),
-                  role: 'assistant',
-                  content: answerPart,
-                  reasoning: reasoningPart || undefined,
-                  reasoningOpen: !!reasoningPart,
-                  timestamp: Date.now(),
-                } as Message;
-              };
-
-              if (lastMsg && lastMsg.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  mergeInto(lastMsg),
-                ];
+                return prev;
+              });
+            } else if (data.type === 'typing' && data.chatId === chatIdRef.current) {
+              setIsTyping(data.isTyping);
+            } else if (data.type === 'error') {
+              setIsProcessing(false);
+              setError(data.message);
+            } else if (data.type === 'stream-progress' && data.chatId === chatIdRef.current) {
+              if (data.content) {
+                const parts = data.content.split('__REASONING__');
+                const answerPart = parts.shift() || '';
+                const reasoningPart = parts.join('');
+                setMessages(prev => {
+                  const lastMsg = prev[prev.length - 1];
+                  const mergeInto = (base: Message | null): Message => {
+                    if (base) {
+                      return {
+                        ...base,
+                        content: answerPart || base.content,
+                        reasoning: reasoningPart ? ((base.reasoning || '') + reasoningPart) : base.reasoning,
+                        reasoningOpen: base.reasoningOpen ?? false,
+                      } as Message;
+                    }
+                    return {
+                      id: Date.now().toString(),
+                      role: 'assistant',
+                      content: answerPart,
+                      reasoning: reasoningPart || undefined,
+                      reasoningOpen: !!reasoningPart,
+                      timestamp: Date.now(),
+                    } as Message;
+                  };
+                  if (lastMsg && lastMsg.role === 'assistant') {
+                    return [
+                      ...prev.slice(0, -1),
+                      mergeInto(lastMsg),
+                    ];
+                  }
+                  return [...prev, mergeInto(null)];
+                });
               }
-
-              return [...prev, mergeInto(null)];
-            });
+            }
+          } catch (err) {
+            // Silently ignore malformed payloads in production but log in dev
+            if (process.env.NODE_ENV !== 'production') {
+              console.error('[WebSocket] Failed to parse message', err, raw);
+            }
           }
+        };
+
+        if (typeof event.data === 'string') {
+          handleMessage(event.data);
+        } else if (event.data instanceof Blob) {
+          event.data.text().then(handleMessage).catch(() => {});
         }
       };
 
