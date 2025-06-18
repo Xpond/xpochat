@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, KeyboardEvent, useState } from 'react';
 import ModelSelector from './ModelSelector';
+import { fetchWithAuth } from '../../utils/fetchWithAuth';
 
 interface ChatInputAreaProps {
   inputText: string;
@@ -90,51 +91,35 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // Handle file selection (from click or paste)
   const handleFiles = async (files: FileList | File[]) => {
-    if (!files || files.length === 0) return;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    if (!getToken) return;
 
-      const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const fileArray = Array.from(files);
+    for (const file of fileArray) {
+      // Validate file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+        continue;
+      }
+
+      const id = `att_${Date.now()}_${Math.random()}`;
       const isImage = file.type.startsWith('image/');
       const localUrl = isImage ? URL.createObjectURL(file) : '';
 
-      // Convert file to base64 for AI processing (images for vision, docs for text extraction)
-      let base64Data = '';
-      if (isImage || file.type === 'application/pdf' || 
-          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-          file.type === 'application/msword' ||
-          file.type.startsWith('audio/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          if (result) {
-            base64Data = result;
-            setAttachments((prev) =>
-              prev.map((a) => (a.id === id ? { ...a, base64: result } : a))
-            );
-          }
-        };
-        reader.readAsDataURL(file);
-      }
+      // Add to UI immediately
+      setAttachments((prev) => [...prev, {
+        id,
+        name: file.name,
+        type: file.type,
+        preview: localUrl || '/default-file-icon.png',
+        uploading: true,
+      }]);
 
-      // Push optimistic preview (uploading)
-      setAttachments((prev) => [
-        ...prev,
-        {
-          id,
-          name: file.name,
-          type: file.type,
-          preview: localUrl || '',
-          uploading: true,
-          base64: base64Data,
-        },
-      ]);
-
+      // Get token for upload
       const token = await getToken();
       if (!token) {
-        // Cannot upload; mark as not uploading to remove spinner
-        setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, uploading: false } : a)));
-        continue;
+        console.error('No auth token for upload');
+        setAttachments((prev) => prev.filter((a) => a.id !== id));
+        return;
       }
 
       // Async upload
@@ -145,12 +130,11 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
       (async () => {
         try {
-          const resp = await fetch('/api/upload', {
+          const resp = await fetchWithAuth(getToken, '/api/upload', {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
             body: formData,
           });
-          if (!resp.ok) {
+          if (!resp?.ok) {
             console.error('Upload failed');
             // Mark as failed (optional): remove attachment preview
             setAttachments((prev) => prev.filter((a) => a.id !== id));

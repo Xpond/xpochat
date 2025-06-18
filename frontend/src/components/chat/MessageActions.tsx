@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { fetchWithAuth } from '../../utils/fetchWithAuth';
 
 interface MessageActionsProps {
   content: string;
@@ -45,17 +46,15 @@ const MessageActions: React.FC<MessageActionsProps> = ({
     
     updateState('sharing', true);
     try {
-      const token = await getToken();
-      const response = await fetch(`/api/chats/${chatId}/share`, {
+      const response = await fetchWithAuth(getToken, `/api/chats/${chatId}/share`, {
         method: 'POST',
         headers: { 
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ messages })
       });
 
-      if (response.ok) {
+      if (response?.ok) {
         const shareUrl = `${window.location.origin}/share/${chatId}`;
         await navigator.clipboard.writeText(shareUrl);
         updateState('shared', true);

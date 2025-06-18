@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { fetchWithAuth } from '../../utils/fetchWithAuth';
 
 interface SettingsPanelProps {
   rightPanelOpen: boolean;
@@ -59,22 +60,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
 }) => {
   
+  // Debounced opacity change handler
   const handleOpacityChange = (newOpacity: number) => {
     setContainerOpacity(newOpacity);
-    
-    // Convert slider value to actual opacity: 0 = fully opaque (1.0), 100 = fully transparent (0.0)
-    // But we want a reasonable range, so let's map: 0 = 0.9 opacity, 100 = 0.1 opacity
-    const actualOpacity = 0.9 - (newOpacity * 0.8) / 100;
-    document.documentElement.style.setProperty('--container-opacity', actualOpacity.toString());
+    // Debounce the theme change to avoid too many calls
+    const timeoutId = setTimeout(() => {
+      changeTheme(selectedColor, gradientType);
+    }, 100);
+    return () => clearTimeout(timeoutId);
   };
 
+  // Debounced font size change handler
   const handleFontSizeChange = (newFontSize: number) => {
     setFontSize(newFontSize);
-    
-    // Convert slider value to font size: 50 = 0.75rem, 100 = 1rem, 150 = 1.25rem
-    // Range: 50-150, mapping to 0.75rem - 1.25rem
-    const actualFontSize = 0.75 + (newFontSize - 50) * 0.5 / 100;
-    document.documentElement.style.setProperty('--container-font-size', `${actualFontSize}rem`);
+    // Debounce the theme change to avoid too many calls
+    const timeoutId = setTimeout(() => {
+      changeTheme(selectedColor, gradientType);
+    }, 100);
+    return () => clearTimeout(timeoutId);
   };
 
   return (
@@ -195,16 +198,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       <button
                         onClick={async () => {
                           try {
-                            const token = await getToken();
-                            if (!token) {
-                              throw new Error('Authentication token unavailable. Please log in again.');
-                            }
-
-                            const res = await fetch('/api/user/keys', {
+                            const res = await fetchWithAuth(getToken, '/api/user/keys', {
                               method: 'POST',
                               headers: {
                                 'Content-Type': 'application/json',
-                                Authorization: `Bearer ${token}`,
                               },
                               body: JSON.stringify({
                                 provider,
@@ -212,9 +209,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                               }),
                             });
 
-                            if (!res.ok) {
-                              const msg = await res.text();
-                              throw new Error(`Failed to save API key: ${res.status} ${msg}`);
+                            if (!res?.ok) {
+                              const msg = await res?.text();
+                              throw new Error(`Failed to save API key: ${res?.status} ${msg}`);
                             }
 
                             await Promise.all([fetchActiveKeys(), fetchModels()]);
@@ -239,21 +236,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       <button
                         onClick={async () => {
                           try {
-                            const token = await getToken();
-                            if (!token) {
-                              throw new Error('Authentication token unavailable. Please log in again.');
-                            }
-
-                            const res = await fetch(`/api/user/keys/${provider}`, {
+                            const res = await fetchWithAuth(getToken, `/api/user/keys/${provider}`, {
                               method: 'DELETE',
-                              headers: {
-                                Authorization: `Bearer ${token}`,
-                              },
                             });
 
-                            if (!res.ok) {
-                              const msg = await res.text();
-                              throw new Error(`Failed to delete API key: ${res.status} ${msg}`);
+                            if (!res?.ok) {
+                              const msg = await res?.text();
+                              throw new Error(`Failed to delete API key: ${res?.status} ${msg}`);
                             }
 
                             setApiKeys((prev) => {
