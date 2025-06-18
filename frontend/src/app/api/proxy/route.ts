@@ -45,6 +45,12 @@ async function handleProxyRequest(request: NextRequest, method: string) {
   // Production default (Railway) → http://backend.internal:8080
   const isDev = process.env.NODE_ENV !== 'production';
   const backendBaseUrl = process.env.BACKEND_INTERNAL_URL || (isDev ? "http://localhost:3001" : "http://backend.internal:8080");
+
+  // Debug: log what URL we are about to fetch in production. Remove or comment out once issue is fixed.
+  if (!isDev) {
+    console.log('[proxy] backendBaseUrl=', backendBaseUrl, 'path=', path);
+  }
+
   const backendUrl = `${backendBaseUrl}${path}`;
 
   try {
