@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import ThreeBackground from "@/components/ThreeBackground";
+import PHProvider from "@/components/PHProvider";
 
 // Single unified font
 const inter = Inter({
@@ -28,8 +29,10 @@ export default function RootLayout({
         className={`${inter.variable} antialiased text-[17px]`}
       >
         <ClerkProvider>
-          <ThreeBackground />
-          {children}
+          <PHProvider>
+            <ThreeBackground />
+            {children}
+          </PHProvider>
         </ClerkProvider>
       </body>
     </html>
