@@ -240,7 +240,7 @@ class DragonflyDBManager {
   }
 
   // User theme preferences
-  async getUserTheme(userId: string): Promise<{color: string, gradientType: string, containerOpacity?: number, fontSize?: number} | null> {
+  async getUserTheme(userId: string): Promise<{color: string, gradientType: string, containerOpacity?: number, fontSize?: number, chatFontSize?: number} | null> {
     const key = `user:${userId}:theme`;
     if (this.fallbackMode) {
       const theme = this.fallbackStore.get(key);
@@ -250,15 +250,15 @@ class DragonflyDBManager {
     return theme ? JSON.parse(theme) : null;
   }
 
-  async setUserTheme(userId: string, color: string, gradientType: string, containerOpacity?: number, fontSize?: number): Promise<void> {
+  async setUserTheme(userId: string, color: string, gradientType: string, containerOpacity?: number, fontSize?: number, chatFontSize?: number): Promise<void> {
     const key = `user:${userId}:theme`;
-    const themeData = JSON.stringify({ color, gradientType, containerOpacity, fontSize });
+    const themeData = JSON.stringify({ color, gradientType, containerOpacity, fontSize, chatFontSize });
     if (this.fallbackMode) {
       this.fallbackStore.set(key, themeData);
     } else {
       await this.client.set(key, themeData);
     }
-    log.debug('User theme saved', { userId, color, gradientType, containerOpacity, fontSize, fallback: this.fallbackMode });
+    log.debug('User theme saved', { userId, color, gradientType, containerOpacity, fontSize, chatFontSize, fallback: this.fallbackMode });
   }
 
   // Permanently delete a chat and remove it from the user's chat set

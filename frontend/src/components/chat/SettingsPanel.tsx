@@ -25,6 +25,8 @@ interface SettingsPanelProps {
   setContainerOpacity: React.Dispatch<React.SetStateAction<number>>;
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
+  chatFontSize: number;
+  setChatFontSize: React.Dispatch<React.SetStateAction<number>>;
   changeTheme: (color: string, gradType?: string) => void;
   markThemeAdjustment: () => void;
   /** Callback fired when the mouse leaves the panel so the parent can close it. */
@@ -57,6 +59,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   setContainerOpacity,
   fontSize,
   setFontSize,
+  chatFontSize,
+  setChatFontSize,
   changeTheme,
   markThemeAdjustment,
   onClose,
@@ -86,6 +90,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     }
 
     // Mark theme adjustment to keep panels open
+    markThemeAdjustment();
+  };
+
+  // Chat font size handler
+  const handleChatFontSizeChange = (newSize: number) => {
+    setChatFontSize(newSize);
+
+    const actual = 0.75 + (newSize - 50) * 0.5 / 100;
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--chat-font-size', `${actual}rem`);
+    }
+
     markThemeAdjustment();
   };
 
@@ -373,7 +389,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             {/* Font Size */}
             <div>
               <label className="block text-xs text-gray-300 mb-2">
-                Font Size ({fontSize}%)
+                Side Panel Font Size ({fontSize}%)
               </label>
               <div className="space-y-2">
                 <input
@@ -388,6 +404,34 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       rgba(var(--teal-primary-rgb, 20, 184, 166), 0.3) 0%, 
                       rgba(var(--teal-primary-rgb, 20, 184, 166), 0.6) ${(fontSize - 50) * 100 / 100}%, 
                       rgba(255, 255, 255, 0.1) ${(fontSize - 50) * 100 / 100}%, 
+                      rgba(255, 255, 255, 0.1) 100%)`
+                  }}
+                />
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>Small</span>
+                  <span>Large</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Chat Font Size */}
+            <div>
+              <label className="block text-xs text-gray-300 mb-2">
+                Chat Font Size ({chatFontSize}%)
+              </label>
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="50"
+                  max="150"
+                  value={chatFontSize}
+                  onChange={(e) => handleChatFontSizeChange(parseInt(e.target.value))}
+                  className="w-full opacity-slider"
+                  style={{
+                    background: `linear-gradient(to right, 
+                      rgba(var(--teal-primary-rgb, 20, 184, 166), 0.3) 0%, 
+                      rgba(var(--teal-primary-rgb, 20, 184, 166), 0.6) ${(chatFontSize - 50) * 100 / 100}%, 
+                      rgba(255, 255, 255, 0.1) ${(chatFontSize - 50) * 100 / 100}%, 
                       rgba(255, 255, 255, 0.1) 100%)`
                   }}
                 />

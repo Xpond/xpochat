@@ -1,17 +1,19 @@
 ﻿@import "tailwindcss";
 
 :root {
-  --background: #08615a;
+  --background: #002421;
   --foreground: #ededed;
   --container-bg: rgba(26, 26, 26, 0.8);
   --container-border: rgba(26, 74, 74, 0.3);
-  --teal-primary: #00615a;
+  --teal-primary: #002421;
   --teal-secondary: #0f2f2f;
   --dark-primary: #0a0a0a;
   --dark-secondary: #1a1a1a;
   --teal-primary-rgb: 8, 97, 90;
   --container-opacity: 0.9;
   --container-font-size: 1rem;
+  /* Default chat (main container) font size */
+  --chat-font-size: 1rem;
 }
 
 /* Theme configuration for Tailwind CSS
@@ -63,6 +65,37 @@ body {
   }
 }
 
+/* Thinking process animations */
+.thinking-expand {
+  animation: thinking-expand 0.3s ease-out;
+}
+
+@keyframes thinking-expand {
+  0% {
+    max-height: 12rem;
+    opacity: 0.8;
+  }
+  100% {
+    max-height: none;
+    opacity: 1;
+  }
+}
+
+.thinking-collapse {
+  animation: thinking-collapse 0.3s ease-in;
+}
+
+@keyframes thinking-collapse {
+  0% {
+    max-height: none;
+    opacity: 1;
+  }
+  100% {
+    max-height: 12rem;
+    opacity: 0.9;
+  }
+}
+
 /* Dynamic scrollbar colour – uses --teal-primary-rgb set by the colour picker */
 .code-scrollbar {
   scrollbar-width: thin;
@@ -81,6 +114,35 @@ body {
 .code-scrollbar::-webkit-scrollbar-thumb {
   background-color: rgba(var(--teal-primary-rgb, 45, 212, 191), 0.4);
   border-radius: 3px;
+}
+
+/* Thinking process scrollbar - enhanced */
+.thinking-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--teal-primary-rgb, 45, 212, 191), 0.3) transparent;
+}
+
+.thinking-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.thinking-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.thinking-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, 
+    rgba(var(--teal-primary-rgb, 45, 212, 191), 0.4) 0%,
+    rgba(var(--teal-primary-rgb, 45, 212, 191), 0.2) 100%);
+  border-radius: 3px;
+  border: 1px solid rgba(var(--teal-primary-rgb, 45, 212, 191), 0.1);
+}
+
+.thinking-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, 
+    rgba(var(--teal-primary-rgb, 45, 212, 191), 0.6) 0%,
+    rgba(var(--teal-primary-rgb, 45, 212, 191), 0.4) 100%);
 }
 
 /* Code block text selection highlight – same dynamic colour */
@@ -155,6 +217,11 @@ h1, h2, h3, h4, h5, h6 {
   font-size: var(--container-font-size, 1rem);
 }
 
+/* Chat (main container) font sizing */
+.chat-font {
+  font-size: var(--chat-font-size, 1rem);
+}
+
 /* Apply container font size to message content */
 .container-font .prose p,
 .container-font .prose li,
@@ -194,6 +261,47 @@ h1, h2, h3, h4, h5, h6 {
 
 .container-font .prose h3 {
   font-size: calc(var(--container-font-size, 1rem) * 1.25) !important;
+}
+
+/* Apply chat font size to rich text elements */
+.chat-font .prose p,
+.chat-font .prose li,
+.chat-font .prose blockquote,
+.chat-font .prose strong,
+.chat-font .prose em {
+  font-size: var(--chat-font-size, 1rem) !important;
+}
+
+/* Apply chat font size to textarea */
+.chat-font textarea {
+  font-size: var(--chat-font-size, 1rem) !important;
+}
+
+/* Apply chat font size to code blocks */
+.chat-font .prose pre,
+.chat-font .prose code {
+  font-size: var(--chat-font-size, 1rem) !important;
+}
+
+.chat-font pre {
+  font-size: var(--chat-font-size, 1rem) !important;
+}
+
+.chat-font code {
+  font-size: calc(var(--chat-font-size, 1rem) * 0.9) !important;
+}
+
+/* Apply chat font size to headers with scaling */
+.chat-font .prose h1 {
+  font-size: calc(var(--chat-font-size, 1rem) * 2) !important;
+}
+
+.chat-font .prose h2 {
+  font-size: calc(var(--chat-font-size, 1rem) * 1.5) !important;
+}
+
+.chat-font .prose h3 {
+  font-size: calc(var(--chat-font-size, 1rem) * 1.25) !important;
 }
 
 /* Range slider styling */
@@ -378,4 +486,74 @@ h1, h2, h3, h4, h5, h6 {
   .prose td {
     padding: 0.5rem !important;
   }
+  
+  /* Mobile-optimized thinking process */
+  .thinking-scrollbar {
+    /* Slightly thinner scrollbar on mobile */
+    scrollbar-width: thin;
+  }
+  
+  .thinking-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  /* Adjust thinking container max height for mobile */
+  .thinking-collapse {
+    max-height: 10rem !important; /* Smaller on mobile */
+  }
+  
+  /* Mobile-friendly expand button */
+  .thinking-expand button,
+  .thinking-collapse button {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+    min-width: 2rem;
+    min-height: 1.5rem;
+  }
+  
+  /* Better touch targets for mobile */
+  summary {
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Syntax Highlighting - Use high specificity to override existing styles */
+pre code .syntax-comment,
+code .syntax-comment,
+.syntax-comment {
+  color: #6b7280 !important;
+  font-style: italic !important;
+}
+
+pre code .syntax-string,
+code .syntax-string,
+.syntax-string {
+  color: #f5088a !important;
+}
+
+pre code .syntax-number,
+code .syntax-number,
+.syntax-number {
+  color: #10ce7f !important;
+}
+
+pre code .syntax-keyword,
+code .syntax-keyword,
+.syntax-keyword {
+  color: #ee1f3b !important;
+}
+
+/* Code block text wrapping */
+pre {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+pre code {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
 }

@@ -47,6 +47,8 @@ interface MobileChatLayoutProps {
   onRenameChat: (chatId: string, newTitle: string) => void;
   onDeleteChat: (chatId: string) => void;
   onBranchChat: (fromMessageIndex: number) => void;
+  onRetryMessage?: (messageIndex: number) => void;
+  onEditMessage?: (messageIndex: number, newContent: string) => void;
   
   // Settings panel props
   configuringProvider: string | null;
@@ -66,6 +68,8 @@ interface MobileChatLayoutProps {
   setContainerOpacity: React.Dispatch<React.SetStateAction<number>>;
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
+  chatFontSize: number;
+  setChatFontSize: React.Dispatch<React.SetStateAction<number>>;
   changeTheme: (color: string, gradType?: string) => void;
   markThemeAdjustment: () => void;
   
@@ -112,6 +116,8 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
   onRenameChat,
   onDeleteChat,
   onBranchChat,
+  onRetryMessage,
+  onEditMessage,
   
   // Settings panel props
   configuringProvider,
@@ -131,6 +137,8 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
   setContainerOpacity,
   fontSize,
   setFontSize,
+  chatFontSize,
+  setChatFontSize,
   changeTheme,
   markThemeAdjustment,
   
@@ -145,7 +153,7 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
   );
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden">
+    <div className="flex flex-col relative overflow-hidden" style={{ height: '100dvh', maxHeight: '100dvh' }}>
       {/* Top Navigation Bar */}
       <header className="flex-shrink-0 h-16 flex items-center justify-between px-4 z-30 relative">
         {/* Left Panel Button */}
@@ -204,12 +212,12 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
       </header>
 
       {/* Main Chat Container */}
-      <main className="flex-1 flex flex-col min-h-0 px-2 pb-2">
+      <main className="flex-1 flex flex-col min-h-0 p-2 overflow-hidden">
         <div
           style={{
             backgroundColor: `rgba(var(--teal-primary-rgb, 20, 184, 166), var(--container-opacity, 0.26))`,
           }}
-          className="flex-1 backdrop-blur-sm flex flex-col container-font rounded-lg overflow-hidden"
+          className="flex-1 backdrop-blur-sm flex flex-col chat-font rounded-lg overflow-hidden min-h-0"
         >
           {/* Messages Area */}
           <div
@@ -226,6 +234,8 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
               setMessages={setMessages} 
               currentChatId={currentChatId}
               onBranchChat={onBranchChat}
+              onRetryMessage={onRetryMessage}
+              onEditMessage={onEditMessage}
               getToken={getToken}
             />
 
@@ -294,9 +304,9 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
 
       {/* Left Panel - Chat History */}
       {leftPanelOpen && (
-        <div className="fixed top-0 left-0 bottom-0 w-80 z-50 transition-transform duration-300 translate-x-0">
+        <div className="fixed top-4 left-4 bottom-4 w-72 sm:w-80 z-50 transition-transform duration-300 translate-x-0">
           <div 
-            className="h-full pt-16 pb-4 pl-4 pr-4"
+            className="h-full pt-12 pb-4 px-4 rounded-xl"
             style={{
               backgroundColor: `rgba(var(--teal-primary-rgb, 20, 184, 166), var(--container-opacity, 0.4))`,
             }}
@@ -381,9 +391,9 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
 
       {/* Right Panel - Settings */}
       {rightPanelOpen && (
-        <div className="fixed top-0 right-0 bottom-0 w-80 z-50 transition-transform duration-300 translate-x-0">
+        <div className="fixed top-4 right-4 bottom-4 w-72 sm:w-80 z-50 transition-transform duration-300 translate-x-0">
           <div 
-            className="h-full pt-16 pb-4 pl-4 pr-4"
+            className="h-full pt-12 pb-4 px-4 rounded-xl"
             style={{
               backgroundColor: `rgba(var(--teal-primary-rgb, 20, 184, 166), var(--container-opacity, 0.4))`,
             }}
@@ -410,6 +420,8 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
                 setContainerOpacity={setContainerOpacity}
                 fontSize={fontSize}
                 setFontSize={setFontSize}
+                chatFontSize={chatFontSize}
+                setChatFontSize={setChatFontSize}
                 changeTheme={changeTheme}
                 markThemeAdjustment={markThemeAdjustment}
                 onClose={() => {}}

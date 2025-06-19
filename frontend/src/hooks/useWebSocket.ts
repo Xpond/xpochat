@@ -401,7 +401,11 @@ export const useWebSocket = (chatId: string): UseWebSocketReturn => {
         // Don't clear messages or queue - let streams continue in background
         // The chat history loading will handle showing the correct messages
         setIsProcessing(false);
-        setHasJoined(false);
+        // Optimistically mark as joined so the UI doesn\'t block user input while
+        // waiting for the server confirmation packet. The server will still
+        // emit a `joined` event which will keep this flag true. Aligns with
+        // the behaviour in the initial `onopen` handler.
+        setHasJoined(true);
       } else if (ws.current.readyState === WebSocket.CONNECTING) {
         // Wait a bit and try again — the socket is still hand-shaking
         setTimeout(attemptJoin, 300);
