@@ -56,6 +56,7 @@ const HighlightedCode = React.memo<{ code: string; language: string }>(({ code, 
   const highlightedHtml = useMemo(() => highlightCode(code, language), [code, language]);
   return <code dangerouslySetInnerHTML={{ __html: highlightedHtml }} />;
 });
+HighlightedCode.displayName = 'HighlightedCode';
 
 // Optimized code extraction function
 function extractCodeContent(children: React.ReactNode): { code: string; language: string } {
