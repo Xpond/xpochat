@@ -7,21 +7,49 @@ interface ThreeBackgroundProps {
   className?: string;
 }
 
+// Performance constants - easily tunable
+const PARTICLE_COUNT = 100; // Reduced from 150
+const MAX_DISTANCE = 30;
+const MAX_DISTANCE_SQ = MAX_DISTANCE * MAX_DISTANCE; // Pre-calculated for efficiency
+const ANIMATION_SPEED = 0.008; // Reduced from 0.01
+const ENTROPY_PROBABILITY = 0.001; // Reduced from 0.002
+const CHARS_PER_FRAME = 4; // For consistency with streaming system
+
 export default function ThreeBackground({ className = '' }: ThreeBackgroundProps) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const frameIdRef = useRef<number | null>(null);
-  const particleColorsRef = useRef<Float32Array | null>(null);
-  const particleGeometryRef = useRef<THREE.BufferGeometry | null>(null);
-  const lineMaterialRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const lastFrameTime = useRef<number>(0);
+  const performanceMode = useRef<'high' | 'medium' | 'low'>('high');
 
   useEffect(() => {
     if (!mountRef.current) return;
 
-    // Scene setup
+    // Performance monitoring
+    let frameCount = 0;
+    let lastFpsCheck = Date.now();
+    
+    const checkPerformance = () => {
+      const now = Date.now();
+      if (now - lastFpsCheck > 1000) {
+        const fps = frameCount;
+        frameCount = 0;
+        lastFpsCheck = now;
+        
+        // Adaptive quality based on FPS
+        if (fps < 30) {
+          performanceMode.current = 'low';
+        } else if (fps < 50) {
+          performanceMode.current = 'medium';
+        } else {
+          performanceMode.current = 'high';
+        }
+      }
+      frameCount++;
+    };
+
+    // Scene setup with optimized settings
     const scene = new THREE.Scene();
-    sceneRef.current = scene;
+    scene.matrixAutoUpdate = false; // Disable automatic matrix updates
 
     // Camera setup
     const camera = new THREE.PerspectiveCamera(
@@ -31,73 +59,77 @@ export default function ThreeBackground({ className = '' }: ThreeBackgroundProps
       1000
     );
     camera.position.z = 50;
+    camera.matrixAutoUpdate = false;
 
-    // Renderer setup
+    // Optimized renderer setup
     const renderer = new THREE.WebGLRenderer({ 
       alpha: true,
-      antialias: true 
+      antialias: false, // Disabled for performance
+      powerPreference: "high-performance",
+      stencil: false,
+      depth: false
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
-    rendererRef.current = renderer;
+    renderer.sortObjects = false; // Disable sorting for performance
     mountRef.current.appendChild(renderer.domElement);
 
-    // Function to get current theme colors
-    const getCurrentColors = () => {
-      const style = getComputedStyle(document.documentElement);
-      const primaryColor = style.getPropertyValue('--teal-primary').trim() || '#1a4a4a';
-      const hex = primaryColor.replace('#', '');
-      const r = parseInt(hex.slice(0, 2), 16) / 255;
-      const g = parseInt(hex.slice(2, 4), 16) / 255;
-      const b = parseInt(hex.slice(4, 6), 16) / 255;
-      
-      return [
-        new THREE.Color(0x0a0a0a), // Almost black
-        new THREE.Color(0x1a1a1a), // Dark gray
-        new THREE.Color(0x2a2a2a), // Medium dark
-        new THREE.Color(r * 0.6, g * 0.6, b * 0.6), // Darker theme color
-        new THREE.Color(r, g, b), // Theme color
-      ];
+    // Cached theme colors to avoid repeated DOM queries
+    let cachedColors: Float32Array | null = null;
+    let lastThemeCheck = 0;
+    const THEME_CHECK_INTERVAL = 1000; // Check theme every second
+
+    const getCachedColors = (): Float32Array => {
+      const now = Date.now();
+      if (!cachedColors || now - lastThemeCheck > THEME_CHECK_INTERVAL) {
+        const style = getComputedStyle(document.documentElement);
+        const primaryColor = style.getPropertyValue('--teal-primary').trim() || '#1a4a4a';
+        const hex = primaryColor.replace('#', '');
+        const r = parseInt(hex.slice(0, 2), 16) / 255;
+        const g = parseInt(hex.slice(2, 4), 16) / 255;
+        const b = parseInt(hex.slice(4, 6), 16) / 255;
+        
+        // Pre-calculate all color variations as flat array for efficiency
+        cachedColors = new Float32Array([
+          0.04, 0.04, 0.04,           // Almost black
+          0.1, 0.1, 0.1,              // Dark gray
+          0.16, 0.16, 0.16,           // Medium dark
+          r * 0.6, g * 0.6, b * 0.6,  // Darker theme color
+          r, g, b                      // Theme color
+        ]);
+        lastThemeCheck = now;
+      }
+      return cachedColors;
     };
 
-    // Create particles
-    const particleCount = 150;
-    const particles: THREE.Vector3[] = [];
-    const particleGeometry = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(particleCount * 3);
-    const particleColors = new Float32Array(particleCount * 3);
-    
-    particleColorsRef.current = particleColors;
-    particleGeometryRef.current = particleGeometry;
+    // Optimized particle system - work directly with Float32Arrays
+    const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
+    const particleVelocities = new Float32Array(PARTICLE_COUNT * 3); // Pre-calculated velocities
+    const particleColors = new Float32Array(PARTICLE_COUNT * 3);
+    const particlePhases = new Float32Array(PARTICLE_COUNT); // Pre-calculated phase offsets
 
-    // Function to update particle colors
-    const updateParticleColors = () => {
-      const colors = getCurrentColors();
-      for (let i = 0; i < particleCount; i++) {
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        particleColors[i * 3] = color.r;
-        particleColors[i * 3 + 1] = color.g;
-        particleColors[i * 3 + 2] = color.b;
-      }
-      if (particleGeometry.attributes.color) {
-        particleGeometry.attributes.color.needsUpdate = true;
-      }
-    };
-
-    for (let i = 0; i < particleCount; i++) {
-      const x = (Math.random() - 0.5) * 200;
-      const y = (Math.random() - 0.5) * 200;
-      const z = (Math.random() - 0.5) * 200;
+    // Initialize particles with optimized math
+    const colors = getCachedColors();
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const i3 = i * 3;
       
-      particles.push(new THREE.Vector3(x, y, z));
+      // Position
+      particlePositions[i3] = (Math.random() - 0.5) * 200;
+      particlePositions[i3 + 1] = (Math.random() - 0.5) * 200;
+      particlePositions[i3 + 2] = (Math.random() - 0.5) * 200;
       
-      particlePositions[i * 3] = x;
-      particlePositions[i * 3 + 1] = y;
-      particlePositions[i * 3 + 2] = z;
+      // Pre-calculate phase offset for animation
+      particlePhases[i] = i * 0.1;
+      
+      // Assign color from cached palette
+      const colorIndex = Math.floor(Math.random() * 5) * 3;
+      particleColors[i3] = colors[colorIndex];
+      particleColors[i3 + 1] = colors[colorIndex + 1];
+      particleColors[i3 + 2] = colors[colorIndex + 2];
     }
 
-    updateParticleColors();
-
+    // Create particle geometry
+    const particleGeometry = new THREE.BufferGeometry();
     particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     particleGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
 
@@ -112,15 +144,10 @@ export default function ThreeBackground({ className = '' }: ThreeBackgroundProps
     const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
     scene.add(particleSystem);
 
-    // Create connecting lines between nearby particles
-    const lineGeometry = new THREE.BufferGeometry();
-
-    // Pre-allocate a buffer large enough to hold the maximum possible number of
-    // positions for all potential line segments between particles. Each
-    // connection requires 2 vertices (start & end) → 6 float values.
-    const maxConnections = (particleCount * (particleCount - 1)) / 2;
+    // Optimized line system
+    const maxConnections = (PARTICLE_COUNT * (PARTICLE_COUNT - 1)) / 2;
     const linePositionsArray = new Float32Array(maxConnections * 6);
-    // Create the attribute once and reuse it every frame.
+    const lineGeometry = new THREE.BufferGeometry();
     const linePositionAttr = new THREE.BufferAttribute(linePositionsArray, 3);
     lineGeometry.setAttribute('position', linePositionAttr);
 
@@ -130,118 +157,183 @@ export default function ThreeBackground({ className = '' }: ThreeBackgroundProps
       opacity: 0.3,
       blending: THREE.AdditiveBlending,
     });
-    lineMaterialRef.current = lineMaterial;
 
-    // Function to update line color
-    const updateLineColor = () => {
-      const style = getComputedStyle(document.documentElement);
-      const primaryColor = style.getPropertyValue('--teal-primary').trim() || '#1a4a4a';
-      lineMaterial.color.setHex(parseInt(primaryColor.replace('#', '0x')));
-    };
+    const lineSystem = new THREE.LineSegments(lineGeometry, lineMaterial);
+    scene.add(lineSystem);
 
+    // Optimized line update function using squared distances
     const updateLines = () => {
-      const maxDistance = 30;
-      let index = 0; // Tracks position in the pre-allocated array
+      let index = 0;
+      const skipLines = performanceMode.current === 'low';
+      
+      if (skipLines) {
+        lineGeometry.setDrawRange(0, 0);
+        return;
+      }
 
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const distance = particles[i].distanceTo(particles[j]);
-          if (distance < maxDistance) {
-            // Start vertex
-            linePositionsArray[index++] = particles[i].x;
-            linePositionsArray[index++] = particles[i].y;
-            linePositionsArray[index++] = particles[i].z;
-            // End vertex
-            linePositionsArray[index++] = particles[j].x;
-            linePositionsArray[index++] = particles[j].y;
-            linePositionsArray[index++] = particles[j].z;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const i3 = i * 3;
+        const x1 = particlePositions[i3];
+        const y1 = particlePositions[i3 + 1];
+        const z1 = particlePositions[i3 + 2];
+
+        for (let j = i + 1; j < PARTICLE_COUNT; j++) {
+          const j3 = j * 3;
+          const x2 = particlePositions[j3];
+          const y2 = particlePositions[j3 + 1];
+          const z2 = particlePositions[j3 + 2];
+
+          // Use squared distance to avoid expensive sqrt
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const dz = z2 - z1;
+          const distanceSq = dx * dx + dy * dy + dz * dz;
+
+          if (distanceSq < MAX_DISTANCE_SQ) {
+            linePositionsArray[index++] = x1;
+            linePositionsArray[index++] = y1;
+            linePositionsArray[index++] = z1;
+            linePositionsArray[index++] = x2;
+            linePositionsArray[index++] = y2;
+            linePositionsArray[index++] = z2;
           }
         }
       }
 
-      // Update draw range to the number of vertices we actually filled.
       lineGeometry.setDrawRange(0, index / 3);
-      // Inform Three.js that the underlying buffer changed.
       linePositionAttr.needsUpdate = true;
     };
 
-    updateLines();
-    const lineSystem = new THREE.LineSegments(lineGeometry, lineMaterial);
-    scene.add(lineSystem);
+    // Optimized theme update with throttling
+    let themeUpdateQueued = false;
+    const updateTheme = () => {
+      if (themeUpdateQueued) return;
+      themeUpdateQueued = true;
+      
+      requestAnimationFrame(() => {
+        const colors = getCachedColors();
+        
+        // Update particle colors
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const i3 = i * 3;
+          const colorIndex = Math.floor(Math.random() * 5) * 3;
+          particleColors[i3] = colors[colorIndex];
+          particleColors[i3 + 1] = colors[colorIndex + 1];
+          particleColors[i3 + 2] = colors[colorIndex + 2];
+        }
+        particleGeometry.attributes.color.needsUpdate = true;
+        
+        // Update line color
+        const primaryColor = getComputedStyle(document.documentElement)
+          .getPropertyValue('--teal-primary').trim() || '#1a4a4a';
+        lineMaterial.color.setHex(parseInt(primaryColor.replace('#', '0x')));
+        
+        themeUpdateQueued = false;
+      });
+    };
 
-    // Listen for theme changes
-    const observer = new MutationObserver(() => {
-      updateParticleColors();
-      updateLineColor();
-    });
+    // Throttled theme observer
+    const observer = new MutationObserver(() => updateTheme());
     observer.observe(document.head, { childList: true, subtree: true });
 
     // Animation variables
     let scrollY = 0;
     let time = 0;
 
-    // Handle scroll
+    // Throttled scroll handler
+    let scrollUpdateQueued = false;
     const handleScroll = () => {
-      scrollY = window.scrollY;
+      if (scrollUpdateQueued) return;
+      scrollUpdateQueued = true;
+      requestAnimationFrame(() => {
+        scrollY = window.scrollY;
+        scrollUpdateQueued = false;
+      });
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Animation loop
-    const animate = () => {
+    // Pre-calculated sine/cosine tables for performance
+    const sineTable = new Float32Array(PARTICLE_COUNT);
+    const cosineTable = new Float32Array(PARTICLE_COUNT);
+
+    // Optimized animation loop
+    const animate = (currentTime: number) => {
       frameIdRef.current = requestAnimationFrame(animate);
-      time += 0.01;
+      
+      // Throttle to 60fps max
+      if (currentTime - lastFrameTime.current < 16.67) return;
+      lastFrameTime.current = currentTime;
+      
+      checkPerformance();
+      time += ANIMATION_SPEED;
 
-      // Animate particles with entropy simulation
-      for (let i = 0; i < particles.length; i++) {
-        // Add gentle floating motion
-        particles[i].x += Math.sin(time + i * 0.1) * 0.02;
-        particles[i].y += Math.cos(time + i * 0.1) * 0.02;
-        particles[i].z += Math.sin(time * 0.5 + i * 0.05) * 0.01;
+      // Pre-calculate common values
+      const timeHalf = time * 0.5;
+      const timeOffset = time * 0.05;
 
-        // Update particle positions
-        particlePositions[i * 3] = particles[i].x;
-        particlePositions[i * 3 + 1] = particles[i].y;
-        particlePositions[i * 3 + 2] = particles[i].z;
+      // Update particles with optimized math
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const i3 = i * 3;
+        const phase = particlePhases[i];
+        
+        // Cache sine/cosine calculations
+        sineTable[i] = Math.sin(time + phase);
+        cosineTable[i] = Math.cos(time + phase);
+        
+        // Apply gentle floating motion
+        particlePositions[i3] += sineTable[i] * 0.02;
+        particlePositions[i3 + 1] += cosineTable[i] * 0.02;
+        particlePositions[i3 + 2] += Math.sin(timeHalf + timeOffset) * 0.01;
 
-        // Add entropy by occasionally shifting particles
-        if (Math.random() < 0.002) {
-          particles[i].x += (Math.random() - 0.5) * 2;
-          particles[i].y += (Math.random() - 0.5) * 2;
+        // Optimized entropy with reduced frequency
+        if (Math.random() < ENTROPY_PROBABILITY) {
+          particlePositions[i3] += (Math.random() - 0.5) * 2;
+          particlePositions[i3 + 1] += (Math.random() - 0.5) * 2;
         }
       }
 
       // Update particle system
       particleGeometry.attributes.position.needsUpdate = true;
 
-      // Update connecting lines
-      updateLines();
+      // Update lines only in high/medium performance mode
+      if (performanceMode.current !== 'low') {
+        updateLines();
+      }
 
-      // Rotate entire scene based on scroll
+      // Optimized scene rotation
       scene.rotation.y = scrollY * 0.0005;
       scene.rotation.x = scrollY * 0.0002;
+      scene.updateMatrix();
 
-      // Camera movement
+      // Optimized camera movement
       camera.position.x = Math.sin(time * 0.2) * 2;
       camera.position.y = Math.cos(time * 0.15) * 1;
+      camera.updateMatrix();
 
       renderer.render(scene, camera);
     };
 
-    animate();
+    // Start animation
+    animate(0);
 
-    // Handle resize
+    // Optimized resize handler with debouncing
+    let resizeTimeout: NodeJS.Timeout;
     const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }, 100);
     };
     window.addEventListener('resize', handleResize);
 
-    // Cleanup
+    // Cleanup function
     return () => {
       observer.disconnect();
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimeout);
       
       if (frameIdRef.current) {
         cancelAnimationFrame(frameIdRef.current);
@@ -251,18 +343,19 @@ export default function ThreeBackground({ className = '' }: ThreeBackgroundProps
         mountRef.current.removeChild(renderer.domElement);
       }
       
-      renderer.dispose();
+      // Thorough cleanup
       particleGeometry.dispose();
       particleMaterial.dispose();
       lineGeometry.dispose();
       lineMaterial.dispose();
+      renderer.dispose();
     };
   }, []);
 
   return (
     <div 
       ref={mountRef} 
-      className="fixed inset-0 -z-10"
+      className={`fixed inset-0 -z-10 ${className}`}
       style={{ pointerEvents: 'none' }}
       suppressHydrationWarning={true}
     />

@@ -1014,7 +1014,14 @@ export default function ChatPage() {
   // --- CONDITIONAL RENDER ---
   // This now happens *after* all hooks have been called.
   if (!isLoaded || !userId) {
-    return null;
+    return (
+      <div className="h-screen w-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-2 border-teal-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-teal-300 text-lg font-light">Loading your chat...</p>
+        </div>
+      </div>
+    );
   }
 
   // --- MAIN RENDER ---
@@ -1156,20 +1163,62 @@ export default function ChatPage() {
 
             {/* Welcome overlay - only show for truly empty chats, not during loading */}
             {messages.length === 0 && !isLoadingChat && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                <div className="pointer-events-auto max-w-lg">
-                  <h2 className="text-4xl sm:text-5xl font-light text-teal-300 mb-4">Welcome to Xpochat</h2>
-                  <p className="text-lg text-gray-400 mb-8">Ask anything to get started, or try one of these prompts:</p>
-                  <div className="flex flex-wrap gap-3 justify-center">
-                    {STARTER_SUGGESTIONS.map((s) => (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-8">
+                <div className="pointer-events-auto max-w-2xl w-full">
+                  {/* Hero Section */}
+                  <div className="mb-12 animate-fade-in-up">
+                    <h2 className="text-5xl sm:text-6xl font-light bg-gradient-to-r from-teal-200 via-teal-300 to-teal-400 bg-clip-text text-transparent mb-8 tracking-tight">
+                      Welcome to Xpochat
+                    </h2>
+                    <p className="text-xl text-gray-300 font-light mb-6">
+                      Lightning-fast AI at your fingertips
+                    </p>
+                    <p className="text-base text-gray-400 font-light max-w-lg mx-auto leading-relaxed">
+                      Ask anything to get started, or try one of these conversation starters
+                    </p>
+                  </div>
+
+                  {/* Starter Suggestions */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 animate-fade-in-up delay-200">
+                    {STARTER_SUGGESTIONS.map((suggestion, index) => (
                       <button
-                        key={s}
-                        onClick={() => handleSendMessage(s)}
-                        className="pointer-events-auto px-4 py-2 bg-black/40 hover:bg-black/60 rounded-full text-base border border-teal-800/40 text-teal-200 transition-colors"
+                        key={suggestion}
+                        onClick={() => handleSendMessage(suggestion)}
+                        className="pointer-events-auto group relative overflow-hidden bg-gradient-to-r from-black/20 to-black/10 hover:from-teal-900/30 hover:to-teal-800/20 border border-teal-700/30 hover:border-teal-500/50 rounded-2xl p-4 text-left transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-teal-500/10"
+                        style={{ animationDelay: `${(index + 3) * 100}ms` }}
                       >
-                        {s}
+                        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <div className="relative z-10">
+                          <div className="flex items-start gap-3">
+                            <div className="w-2 h-2 bg-teal-400 rounded-full mt-2 group-hover:bg-teal-300 transition-colors"></div>
+                            <span className="text-gray-200 group-hover:text-white font-medium text-sm leading-relaxed transition-colors">
+                              {suggestion}
+                            </span>
+                          </div>
+                        </div>
                       </button>
                     ))}
+                  </div>
+
+                  {/* Quick Tips */}
+                  <div className="animate-fade-in-up delay-400">
+                    <div className="flex items-center justify-center gap-6 text-xs text-gray-500 mb-4">
+                      <span className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-teal-400 rounded-full"></div>
+                        Ultra-fast streaming
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-teal-400 rounded-full"></div>
+                        Multimodal support
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-teal-400 rounded-full"></div>
+                        Smart conversations
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-light">
+                      Tip: Use the panels on the left and right to manage your chats and settings
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1177,8 +1226,11 @@ export default function ChatPage() {
 
             {/* Loading overlay during chat switching */}
             {isLoadingChat && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10 backdrop-blur-sm">
+                <div className="text-center">
+                  <div className="w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-teal-300 text-sm font-light">Switching chat...</p>
+                </div>
               </div>
             )}
           </div>

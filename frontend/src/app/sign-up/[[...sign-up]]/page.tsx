@@ -4,12 +4,15 @@ export default function SignUpPage() {
   return (
     <div className="flex min-h-screen items-center justify-center relative z-10 px-4">
       <div className="w-full max-w-md flex flex-col items-center">
-        <div className="mb-12 text-center w-full">
-          <h1 className="text-6xl font-light bg-gradient-to-r from-teal-300 via-teal-400 to-teal-500 bg-clip-text text-transparent mb-6 tracking-tight">
+        <div className="mb-16 text-center w-full">
+          <h1 className="text-7xl font-light bg-gradient-to-r from-teal-300 via-teal-400 to-teal-500 bg-clip-text text-transparent mb-8 tracking-tight">
             xpochat
           </h1>
-          <p className="text-xl text-gray-300 font-light">
-            Join the future of AI conversations
+          <p className="text-2xl text-gray-200 font-light mb-2">
+            Join the future
+          </p>
+          <p className="text-lg text-gray-400 font-light">
+            Experience lightning-fast AI conversations
           </p>
         </div>
         <div className="w-full flex justify-center">

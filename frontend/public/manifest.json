@@ -1,0 +1,16 @@
+{
+  "name": "Xpochat",
+  "short_name": "Xpochat",
+  "description": "Lightning Fast AI Conversations",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#14b8a6",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+} 

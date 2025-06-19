@@ -241,20 +241,58 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
 
             {/* Welcome overlay - only show for truly empty chats, not during loading */}
             {messages.length === 0 && !isLoadingChat && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-4">
-                <div className="pointer-events-auto max-w-sm">
-                  <h2 className="text-2xl sm:text-3xl font-light text-teal-300 mb-3">Welcome to Xpochat</h2>
-                  <p className="text-sm text-gray-400 mb-6">Ask anything to get started, or try one of these prompts:</p>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {starterSuggestions.slice(0, 3).map((s) => (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-6">
+                <div className="pointer-events-auto max-w-xs w-full">
+                  {/* Hero Section */}
+                  <div className="mb-8 animate-fade-in-up">
+                    <h2 className="text-3xl font-light bg-gradient-to-r from-teal-200 via-teal-300 to-teal-400 bg-clip-text text-transparent mb-6 tracking-tight">
+                      Welcome to Xpochat
+                    </h2>
+                    <p className="text-base text-gray-300 font-light mb-4">
+                      Lightning-fast AI
+                    </p>
+                    <p className="text-sm text-gray-400 font-light leading-relaxed">
+                      Ask anything or try these starters
+                    </p>
+                  </div>
+
+                  {/* Starter Suggestions */}
+                  <div className="space-y-2 mb-6 animate-fade-in-up delay-200">
+                    {starterSuggestions.slice(0, 3).map((suggestion, index) => (
                       <button
-                        key={s}
-                        onClick={() => handleSendMessage(s)}
-                        className="pointer-events-auto px-3 py-2 bg-black/40 hover:bg-black/60 rounded-full text-xs border border-teal-800/40 text-teal-200 transition-colors"
+                        key={suggestion}
+                        onClick={() => handleSendMessage(suggestion)}
+                        className="pointer-events-auto w-full group relative overflow-hidden bg-gradient-to-r from-black/20 to-black/10 hover:from-teal-900/30 hover:to-teal-800/20 border border-teal-700/30 hover:border-teal-500/50 rounded-xl p-3 text-left transition-all duration-300 hover:scale-[1.02]"
+                        style={{ animationDelay: `${(index + 3) * 100}ms` }}
                       >
-                        {s}
+                        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <div className="relative z-10">
+                          <div className="flex items-start gap-2">
+                            <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mt-1.5 group-hover:bg-teal-300 transition-colors"></div>
+                            <span className="text-gray-200 group-hover:text-white font-medium text-xs leading-relaxed transition-colors">
+                              {suggestion}
+                            </span>
+                          </div>
+                        </div>
                       </button>
                     ))}
+                  </div>
+
+                  {/* Quick Tips */}
+                  <div className="animate-fade-in-up delay-400">
+                    <div className="flex items-center justify-center gap-4 text-xs text-gray-500 mb-3">
+                      <span className="flex items-center gap-1">
+                        <div className="w-1 h-1 bg-teal-400 rounded-full"></div>
+                        Fast streaming
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <div className="w-1 h-1 bg-teal-400 rounded-full"></div>
+                        Smart AI
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-light">
+                      Tap the buttons above to access chats and settings
+                    </p>
                   </div>
                 </div>
               </div>
@@ -262,8 +300,11 @@ const MobileChatLayout: React.FC<MobileChatLayoutProps> = ({
 
             {/* Loading overlay during chat switching */}
             {isLoadingChat && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/10 backdrop-blur-sm">
+                <div className="text-center">
+                  <div className="w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-teal-300 text-sm font-light">Switching chat...</p>
+                </div>
               </div>
             )}
           </div>

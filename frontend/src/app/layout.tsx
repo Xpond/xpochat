@@ -16,6 +16,12 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Xpochat - Lightning Fast AI Conversations",
   description: "Experience the future of AI chat with lightning-fast responses and beautifully simple interface",
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({
@@ -25,6 +31,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="shortcut icon" href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
+      </head>
       <body
         className={`${inter.variable} antialiased text-[17px]`}
       >
