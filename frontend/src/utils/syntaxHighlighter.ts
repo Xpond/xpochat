@@ -37,7 +37,7 @@ const LANG_ALIASES: Record<string, string> = {
 
 // Pre-compiled shared patterns for maximum performance
 const SHARED_PATTERNS = {
-  comment: /(\/\*[\s\S]*?\*\/|\/\/.*?$|#.*?$|<!--[\s\S]*?-->)/gm,
+  comment: /(\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/|\/\/[^\r\n]*|#[^\r\n]*|<!--(?:[^-]|-(?!->))*-->)/gm,
   string: /("[^"]*"|'[^']*'|`[^`]*`)/g,
   number: /\b(0x[\da-fA-F]+|\d+\.\d+|\d+)\b/g
 };

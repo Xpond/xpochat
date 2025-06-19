@@ -6,6 +6,51 @@ import remarkGfm from 'remark-gfm'; // GitHub Flavored Markdown (tables, striket
 import MessageActions from './MessageActions';
 import { highlightCode } from '../../utils/syntaxHighlighter';
 
+// URL sanitization function to ensure safe URLs
+function sanitizeUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  
+  try {
+    const parsed = new URL(url);
+    // Only allow safe protocols
+    const allowedProtocols = ['http:', 'https:', 'data:', 'blob:'];
+    if (!allowedProtocols.includes(parsed.protocol)) {
+      return null;
+    }
+    
+    // For data URLs, ensure they're for allowed MIME types
+    if (parsed.protocol === 'data:') {
+      const allowedDataTypes = [
+        'image/',
+        'audio/',
+        'video/',
+        'application/pdf',
+        'text/plain'
+      ];
+      const mimeType = url.split(':')[1]?.split(';')[0];
+      if (!mimeType || !allowedDataTypes.some(type => mimeType.startsWith(type))) {
+        return null;
+      }
+    }
+    
+    return parsed.toString();
+  } catch {
+    // Invalid URL
+    return null;
+  }
+}
+
+// Safe window.open function with security parameters
+function safeWindowOpen(url: string | null): void {
+  if (!url) return;
+  
+  const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+  // Additional security: clear opener reference
+  if (newWindow) {
+    newWindow.opener = null;
+  }
+}
+
 // Memoized code highlighter component for performance
 const HighlightedCode = React.memo<{ code: string; language: string }>(({ code, language }) => {
   const highlightedHtml = useMemo(() => highlightCode(code, language), [code, language]);
@@ -506,30 +551,38 @@ const MessageList: React.FC<MessageListProps> = ({
                 {/* Render user attachments below the text message, aligned to the right */}
                 {msg.attachments && msg.attachments.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2 justify-end">
-                    {msg.attachments.map(att => (
-                      att.type.startsWith('audio/') ? (
-                        <audio key={att.id} controls src={att.url || att.base64} className="max-w-full" />
+                    {msg.attachments.map(att => {
+                      const sanitizedUrl = sanitizeUrl(att.url || att.base64);
+                      
+                      return att.type.startsWith('audio/') ? (
+                        <audio key={att.id} controls src={sanitizedUrl || undefined} className="max-w-full" />
                       ) : att.type.startsWith('image/') ? (
                         <img 
                           key={att.id} 
-                          src={att.url} 
+                          src={sanitizedUrl || undefined} 
                           alt={att.name} 
                           className="rounded-lg border border-teal-800/30 max-w-48 max-h-48 object-cover cursor-pointer hover:opacity-80 transition-opacity" 
-                          onClick={() => window.open(att.url, '_blank')}
+                          onClick={() => safeWindowOpen(sanitizedUrl)}
                         />
                       ) : (
-                        <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="block text-teal-300 underline">
-                          {att.name}
-                        </a>
-                      )
-                    ))}
+                        sanitizedUrl ? (
+                          <a key={att.id} href={sanitizedUrl} target="_blank" rel="noopener noreferrer" className="block text-teal-300 underline">
+                            {att.name}
+                          </a>
+                        ) : (
+                          <span key={att.id} className="block text-gray-500 line-through">
+                            {att.name} (invalid URL)
+                          </span>
+                        )
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
             {/* Assistant audio playback */}
             {msg.role === 'assistant' && msg.audio && (
-              <audio controls autoPlay src={msg.audio} className="mt-4 w-full max-w-md" />
+              <audio controls autoPlay src={sanitizeUrl(msg.audio) || undefined} className="mt-4 w-full max-w-md" />
             )}
             <div
               className={`flex items-center gap-2 text-xs opacity-50 mt-2 ${

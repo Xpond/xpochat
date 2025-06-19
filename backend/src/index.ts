@@ -523,6 +523,16 @@ app.post('/api/user/theme', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Color and gradientType are required' });
     }
     
+    // Validate chatFontSize if provided
+    if (chatFontSize !== undefined) {
+      if (typeof chatFontSize !== 'number' || isNaN(chatFontSize)) {
+        return res.status(400).json({ error: 'chatFontSize must be a valid number' });
+      }
+      if (chatFontSize <= 0 || chatFontSize > 300) {
+        return res.status(400).json({ error: 'chatFontSize must be between 1 and 300' });
+      }
+    }
+    
     await dragonflydb.setUserTheme(userId, color, gradientType, containerOpacity, fontSize, chatFontSize);
     res.json({ success: true });
   } catch (error) {

@@ -915,6 +915,12 @@ export default function ChatPage() {
 
   const handleRetryMessage = async (messageIndex: number) => {
     try {
+      // Validate messageIndex is within bounds
+      if (messageIndex < 0 || messageIndex >= messages.length) {
+        console.error('Message index out of bounds:', messageIndex, 'Array length:', messages.length);
+        return;
+      }
+
       // Get the user message to retry
       const messageToRetry = messages[messageIndex];
       
@@ -947,6 +953,12 @@ export default function ChatPage() {
 
   const handleEditMessage = async (messageIndex: number, newContent: string) => {
     try {
+      // Validate messageIndex is within bounds
+      if (!Number.isInteger(messageIndex) || messageIndex < 0 || messageIndex >= messages.length) {
+        console.error('Invalid message index:', messageIndex, 'Array length:', messages.length);
+        return;
+      }
+
       // Get the user message to edit
       const messageToEdit = messages[messageIndex];
       
