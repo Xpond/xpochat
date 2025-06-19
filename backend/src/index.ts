@@ -507,7 +507,7 @@ app.get('/api/user/theme', authMiddleware, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const theme = await dragonflydb.getUserTheme(userId);
-    res.json({ theme: theme || { color: '#1a4a4a', gradientType: 'linear-diagonal', containerOpacity: 80, fontSize: 100 } });
+    res.json({ theme: theme || { color: '#1a4a4a', gradientType: 'linear-diagonal', containerOpacity: 80, fontSize: 90, chatFontSize: 100 } });
   } catch (error) {
     console.error('Error fetching user theme:', error);
     res.status(500).json({ error: 'Failed to fetch theme' });
@@ -517,13 +517,13 @@ app.get('/api/user/theme', authMiddleware, async (req, res) => {
 app.post('/api/user/theme', authMiddleware, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { color, gradientType, containerOpacity, fontSize } = req.body;
+    const { color, gradientType, containerOpacity, fontSize, chatFontSize } = req.body;
     
     if (!color || !gradientType) {
       return res.status(400).json({ error: 'Color and gradientType are required' });
     }
     
-    await dragonflydb.setUserTheme(userId, color, gradientType, containerOpacity, fontSize);
+    await dragonflydb.setUserTheme(userId, color, gradientType, containerOpacity, fontSize, chatFontSize);
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving user theme:', error);

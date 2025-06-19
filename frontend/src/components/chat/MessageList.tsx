@@ -1,9 +1,39 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; // GitHub Flavored Markdown (tables, strikethrough, task lists)
 import MessageActions from './MessageActions';
+import { highlightCode } from '../../utils/syntaxHighlighter';
+
+// Memoized code highlighter component for performance
+const HighlightedCode = React.memo<{ code: string; language: string }>(({ code, language }) => {
+  const highlightedHtml = useMemo(() => highlightCode(code, language), [code, language]);
+  return <code dangerouslySetInnerHTML={{ __html: highlightedHtml }} />;
+});
+
+// Optimized code extraction function
+function extractCodeContent(children: React.ReactNode): { code: string; language: string } {
+  const firstChild: any = Array.isArray(children) ? children[0] : children;
+  
+  if (firstChild && typeof firstChild === 'object' && 'props' in firstChild) {
+    const inner = firstChild.props.children;
+    const code = typeof inner === 'string' ? inner : Array.isArray(inner) ? inner.join('') : '';
+    
+    let language = '';
+    if (typeof firstChild.props.className === 'string') {
+      const match = firstChild.props.className.match(/language-(\w+)/);
+      if (match) language = match[1];
+    }
+    
+    return { code: code || String(children), language };
+  }
+  
+  return { 
+    code: typeof firstChild === 'string' ? firstChild : String(children), 
+    language: '' 
+  };
+}
 
 // Local message type identical to the one used in ChatPage
 export interface ChatMessage {
@@ -12,6 +42,7 @@ export interface ChatMessage {
   content: string;
   reasoning?: string;
   reasoningOpen?: boolean;
+  reasoningExpanded?: boolean;
   audio?: string; // assistant TTS audio data URL
   attachments?: Array<{ id: string; name: string; type: string; url?: string; base64?: string }>;
   model?: string;
@@ -27,6 +58,8 @@ interface MessageListProps {
   currentChatId?: string;
   onBranchChat?: (fromMessageIndex: number) => void;
   getToken?: () => Promise<string | null>;
+  onRetryMessage?: (messageIndex: number) => void;
+  onEditMessage?: (messageIndex: number, newContent: string) => void;
 }
 
 /**
@@ -41,10 +74,13 @@ const MessageList: React.FC<MessageListProps> = ({
   setMessages, 
   currentChatId,
   onBranchChat,
-  getToken
+  getToken,
+  onRetryMessage,
+  onEditMessage
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef(false);
+  const thinkingScrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Keep the auto-scroll behaviour that existed in ChatPage
   // Only scroll when messages are added or content changes, not when reasoningOpen toggles
@@ -68,6 +104,31 @@ const MessageList: React.FC<MessageListProps> = ({
     prevMessagesRef.current = messages;
   }, [messages]);
 
+  // Auto-scroll thinking containers when reasoning content changes (streaming)
+  useEffect(() => {
+    messages.forEach((msg) => {
+      if (msg.reasoning && msg.reasoningOpen && !msg.reasoningExpanded) {
+        const thinkingContainer = thinkingScrollRefs.current.get(msg.id);
+        if (thinkingContainer) {
+          // Only auto-scroll if user hasn't manually scrolled up
+          const isAtBottom = thinkingContainer.scrollTop + thinkingContainer.clientHeight >= thinkingContainer.scrollHeight - 5;
+          if (isAtBottom) {
+            requestAnimationFrame(() => {
+              thinkingContainer.scrollTop = thinkingContainer.scrollHeight;
+            });
+          }
+        }
+      }
+    });
+  }, [messages.map(msg => msg.reasoning).join('')]);
+
+  // Cleanup refs when component unmounts
+  useEffect(() => {
+    return () => {
+      thinkingScrollRefs.current.clear();
+    };
+  }, []);
+
   return (
     <div className="space-y-4">
       {messages.map((msg, index) => (
@@ -85,14 +146,14 @@ const MessageList: React.FC<MessageListProps> = ({
                 {/* Reasoning Section - Only show if reasoning exists */}
                 {msg.reasoning && (
                   <div 
-                    className={`mb-4 rounded-lg bg-black/20 backdrop-blur-sm transition-all duration-300 ${
+                    className={`mb-4 rounded-lg bg-black/20 backdrop-blur-sm transition-all duration-300 relative ${
                       msg.reasoningOpen 
                         ? 'reasoning-border-pulse' 
                         : 'border border-teal-800/20'
                     }`}
                   >
                     <details
-                      className="group"
+                      className="group cursor-pointer"
                       open={msg.reasoningOpen}
                       onToggle={e => {
                         const details = e.currentTarget;
@@ -105,53 +166,164 @@ const MessageList: React.FC<MessageListProps> = ({
                         );
                       }}
                     >
-                      <summary className="cursor-pointer p-3 flex items-center justify-between text-sm text-teal-300 hover:text-teal-200 transition-colors">
-                        <span className="font-medium">
-                          Thinking Process
-                        </span>
-                        <svg
-                          className="w-4 h-4 transition-transform group-open:rotate-180"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </summary>
-                      <div className="px-3 pb-3 pt-1 border-t border-teal-800/10">
-                        {/* Render reasoning with full Markdown support and larger, readable font */}
-                        <div className="prose prose-invert text-sm sm:text-base leading-relaxed !max-w-none w-full">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              code: ({ className, children, ...props }) => (
-                                <code
-                                  className="bg-black/50 text-teal-300 px-1.5 py-0.5 rounded text-[0.85rem] border border-teal-800/20"
-                                  {...props}
-                                >
-                                  {children}
-                                </code>
-                              ),
-                              pre: ({ children }) => (
-                                <pre className="bg-black/50 border border-teal-800/30 rounded-lg p-3 overflow-x-auto code-scrollbar text-[0.85rem]">
-                                  {children}
-                                </pre>
-                              ),
-                              a: ({ href, children }) => (
-                                <a
-                                  href={href as string}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-teal-300 hover:text-teal-200 underline decoration-teal-400/50 hover:decoration-teal-200"
-                                >
-                                  {children}
-                                </a>
-                              ),
-                            }}
-                          >
-                            {msg.reasoning as string}
-                          </ReactMarkdown>
+                      <summary 
+                        className="cursor-pointer p-3 flex items-center justify-between text-xs text-teal-300 hover:text-teal-200 transition-all duration-200 hover:bg-teal-900/10 list-none"
+                        onClick={(e) => {
+                          // Make the entire summary area clickable
+                          e.preventDefault();
+                          const details = e.currentTarget.closest('details') as HTMLDetailsElement;
+                          if (details) {
+                            details.open = !details.open;
+                            setMessages(prevMsgs =>
+                              prevMsgs.map(m =>
+                                m.id === msg.id ? { ...m, reasoningOpen: details.open } : m
+                              )
+                            );
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                            msg.streaming ? 'bg-teal-400 animate-pulse shadow-sm shadow-teal-400/50' : 'bg-teal-600'
+                          }`}></div>
+                          <span className="font-normal tracking-wide text-[0.68rem]">Thinking Process</span>
+                          {msg.streaming && (
+                            <div className="flex gap-1">
+                              <div className="w-0.5 h-0.5 bg-teal-400/60 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                              <div className="w-0.5 h-0.5 bg-teal-400/60 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                              <div className="w-0.5 h-0.5 bg-teal-400/60 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                            </div>
+                          )}
                         </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setMessages(prevMsgs =>
+                                prevMsgs.map(m =>
+                                  m.id === msg.id ? { ...m, reasoningExpanded: !m.reasoningExpanded } : m
+                                )
+                              );
+                            }}
+                            className="px-1.5 py-0.5 text-[0.6rem] bg-teal-800/20 hover:bg-teal-700/40 rounded border border-teal-700/30 hover:border-teal-600/50 transition-all duration-200 hover:scale-105"
+                            title={msg.reasoningExpanded ? "Collapse" : "Expand"}
+                          >
+                            <span className="font-mono">{msg.reasoningExpanded ? "⤋" : "⤢"}</span>
+                          </button>
+                          <svg
+                            className="w-3 h-3 transition-transform duration-300 group-open:rotate-180"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </summary>
+                      <div className="border-t border-teal-800/10">
+                        {/* Compact scrollable view by default */}
+                        <div 
+                          ref={(el) => {
+                            if (el) {
+                              thinkingScrollRefs.current.set(msg.id, el);
+                            } else {
+                              thinkingScrollRefs.current.delete(msg.id);
+                            }
+                          }}
+                          className={`thinking-scrollbar ${
+                            msg.reasoningExpanded 
+                              ? 'max-h-none thinking-expand' 
+                              : 'max-h-48 overflow-y-auto thinking-collapse'
+                          }`}
+                        >
+                          <div className="px-3 pb-3 pt-2">
+                            <div className="prose prose-invert !max-w-none w-full" style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  code: ({ className, children, ...props }) => (
+                                    <code
+                                      className="bg-gradient-to-r from-black/60 to-black/40 text-teal-300 px-1 py-0.5 rounded text-[0.6rem] border border-teal-800/30 font-mono shadow-sm"
+                                      {...props}
+                                    >
+                                      {children}
+                                    </code>
+                                  ),
+                                  pre: ({ children }) => {
+                                    const { code, language } = extractCodeContent(children);
+
+                                    return (
+                                      <pre className="bg-gradient-to-br from-black/60 to-black/40 border border-teal-800/30 rounded-lg p-2 overflow-x-auto code-scrollbar text-[0.6rem] my-2 shadow-sm">
+                                        <HighlightedCode code={code} language={language} />
+                                      </pre>
+                                    );
+                                  },
+                                  a: ({ href, children }) => (
+                                    <a
+                                      href={href as string}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-teal-300 hover:text-teal-200 underline decoration-teal-400/40 hover:decoration-teal-200 transition-colors"
+                                    >
+                                      {children}
+                                    </a>
+                                  ),
+                                  p: ({ children }) => (
+                                    <p className="text-gray-400 mb-1.5 text-[0.65rem] leading-relaxed tracking-normal font-light">{children}</p>
+                                  ),
+                                  h1: ({ children }) => (
+                                    <h1 className="text-[0.7rem] text-gray-200 mb-1.5 mt-2 font-normal border-b border-teal-800/15 pb-1">
+                                      <span className="text-teal-400 mr-1.5">▶</span>{children}
+                                    </h1>
+                                  ),
+                                  h2: ({ children }) => (
+                                    <h2 className="text-[0.65rem] text-gray-300 mb-1 mt-2 font-normal">
+                                      <span className="text-teal-400 mr-1.5">▸</span>{children}
+                                    </h2>
+                                  ),
+                                  h3: ({ children }) => (
+                                    <h3 className="text-[0.6rem] text-gray-400 mb-1 mt-1.5 font-normal">
+                                      <span className="text-teal-500 mr-1">•</span>{children}
+                                    </h3>
+                                  ),
+                                  ul: ({ children }) => (
+                                    <ul className="ml-3 space-y-0.5 text-gray-400 my-1.5 list-none">
+                                      {children}
+                                    </ul>
+                                  ),
+                                  ol: ({ children }) => (
+                                    <ol className="ml-3 space-y-0.5 text-gray-400 my-1.5 list-none counter-reset-item">
+                                      {children}
+                                    </ol>
+                                  ),
+                                  li: ({ children }) => (
+                                    <li className="text-gray-400 text-[0.6rem] relative pl-3 before:content-['→'] before:absolute before:left-0 before:text-teal-500/70 before:font-mono before:text-[0.55rem] font-light">
+                                      {children}
+                                    </li>
+                                  ),
+                                  blockquote: ({ children }) => (
+                                    <blockquote className="border-l-2 border-teal-500/50 pl-3 italic text-gray-500 my-1.5 text-[0.6rem] bg-teal-900/5 py-1.5 rounded-r font-light">
+                                      {children}
+                                    </blockquote>
+                                  ),
+                                  strong: ({ children }) => (
+                                    <span className="text-gray-200 font-normal">{children}</span>
+                                  ),
+                                  em: ({ children }) => <em className="italic text-teal-200/80 font-light">{children}</em>,
+                                }}
+                              >
+                                {msg.reasoning as string}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Enhanced fade gradient at bottom when collapsed */}
+                        {!msg.reasoningExpanded && (
+                          <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/30 via-black/15 to-transparent pointer-events-none rounded-b-lg">
+                            <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-teal-600/30 rounded-full"></div>
+                          </div>
+                        )}
                       </div>
                     </details>
                   </div>
@@ -161,10 +333,10 @@ const MessageList: React.FC<MessageListProps> = ({
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    // Code blocks
+                    // Code blocks (inline)
                     code: ({ className, children, ...props }) => (
                       <code
-                        className="bg-black/50 text-teal-300 px-2 py-1 rounded text-base sm:text-lg border border-teal-800/30"
+                        className="bg-black/60 text-teal-300 px-2 py-1 rounded-md text-sm font-mono border border-teal-800/30 shadow-sm"
                         {...props}
                       >
                         {children}
@@ -172,31 +344,17 @@ const MessageList: React.FC<MessageListProps> = ({
                     ),
                     // Code blocks (fenced)
                     pre: ({ children }) => {
-                      // Attempt to extract raw code string for copy functionality
-                      let codeString = '';
-                      if (Array.isArray(children)) {
-                        const codeChild: any = children[0];
-                        if (
-                          codeChild &&
-                          codeChild.props &&
-                          Array.isArray(codeChild.props.children) &&
-                          typeof codeChild.props.children[0] === 'string'
-                        ) {
-                          codeString = codeChild.props.children[0];
-                        } else if (typeof codeChild === 'string') {
-                          codeString = codeChild;
-                        }
-                      } else if (typeof children === 'string') {
-                        codeString = children;
-                      }
+                      const { code, language } = extractCodeContent(children);
 
                       return (
-                        <div className="relative group my-3">
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MessageActions content={codeString} isAssistant={false} />
+                        <div className="relative group my-4">
+                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MessageActions content={code} isAssistant={false} />
                           </div>
-                          <pre className="bg-black/50 border border-teal-800/30 rounded-lg p-4 overflow-x-auto code-scrollbar text-base sm:text-lg">
-                            {children}
+                          <pre
+                            className="bg-black/60 border border-teal-800/30 rounded-lg p-4 overflow-x-auto code-scrollbar text-sm font-mono shadow-sm"
+                          >
+                            <HighlightedCode code={code} language={language} />
                           </pre>
                         </div>
                       );
@@ -206,53 +364,101 @@ const MessageList: React.FC<MessageListProps> = ({
                       <img
                         src={src}
                         alt={alt || ''}
-                        className="max-w-full h-auto rounded-lg border border-teal-800/30 my-2"
+                        className="max-w-full h-auto rounded-lg border border-teal-800/30 my-3 shadow-sm"
                         style={{ maxHeight: '400px' }}
                       />
                     ),
-                    // Headers
-                    h1: ({ children }) => <h1 className="text-4xl sm:text-4xl text-white mb-6 mt-8 pb-3">{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-3xl sm:text-3xl text-white mb-5 mt-7 pb-2">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-2xl sm:text-2xl text-white mb-4 mt-6">{children}</h3>,
-                    // Lists
+                    // Headers with elegant styling
+                    h1: ({ children }) => (
+                      <h1 className="text-xl text-white mb-4 mt-6 font-semibold border-b border-teal-800/30 pb-2">
+                        <span className="text-teal-400 mr-3 font-normal">▶</span>{children}
+                      </h1>
+                    ),
+                    h2: ({ children }) => (
+                      <h2 className="text-lg text-white mb-3 mt-5 font-medium">
+                        <span className="text-teal-400 mr-2 font-normal">▸</span>{children}
+                      </h2>
+                    ),
+                    h3: ({ children }) => (
+                      <h3 className="text-base text-gray-200 mb-3 mt-4 font-medium">
+                        <span className="text-teal-500 mr-2">•</span>{children}
+                      </h3>
+                    ),
+                    h4: ({ children }) => (
+                      <h4 className="text-sm text-gray-300 mb-2 mt-3 font-medium">
+                        <span className="text-teal-600 mr-1">‣</span>{children}
+                      </h4>
+                    ),
+                    // Lists with custom styling
                     ul: ({ children }) => (
-                      <ul className="list-disc ml-6 space-y-2 text-gray-100 my-4">
+                      <ul className="ml-6 space-y-2 text-gray-100 my-4 list-none">
                         {children}
                       </ul>
                     ),
                     ol: ({ children }) => (
-                      <ol className="list-decimal ml-6 space-y-2 text-gray-100 my-4">
+                      <ol className="ml-6 space-y-2 text-gray-100 my-4 list-none counter-reset-item">
                         {children}
                       </ol>
                     ),
-                    li: ({ children }) => <li className="text-gray-100 leading-normal text-lg sm:text-xl">{children}</li>,
-                    // Links
+                    li: ({ children }) => (
+                      <li className="text-gray-100 text-base leading-relaxed relative pl-5 before:content-['→'] before:absolute before:left-0 before:text-teal-400 before:font-mono before:text-sm">
+                        {children}
+                      </li>
+                    ),
+                    // Links with refined styling
                     a: ({ href, children }) => (
                       <a
                         href={href as string}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-teal-300 hover:text-teal-200 underline decoration-teal-400/50 hover:decoration-teal-200"
+                        className="text-teal-300 hover:text-teal-200 underline decoration-teal-400/60 hover:decoration-teal-200 transition-colors duration-200"
                       >
                         {children}
                       </a>
                     ),
-                    // Blockquotes
+                    // Blockquotes with elegant styling
                     blockquote: ({ children }) => (
-                      <blockquote className="border-l-4 border-teal-500/80 pl-6 italic text-gray-200 my-5 text-lg sm:text-xl leading-normal">
+                      <blockquote className="border-l-4 border-teal-500/70 pl-6 italic text-gray-200 my-4 text-base leading-relaxed bg-teal-900/5 py-3 rounded-r-md">
                         {children}
                       </blockquote>
                     ),
-                    // Paragraphs
+                    // Paragraphs with refined typography
                     p: ({ children }) => (
-                      <p className="text-gray-100 mb-3 text-lg sm:text-xl leading-normal">{children}</p>
+                      <p className="text-gray-100 mb-4 text-base leading-relaxed tracking-wide">{children}</p>
                     ),
-                    // Strong/Bold
+                    // Strong/Bold with proper contrast
                     strong: ({ children }) => (
-                      <strong className="text-white">{children}</strong>
+                      <strong className="text-white font-semibold">{children}</strong>
                     ),
-                    // Emphasis/Italic
-                    em: ({ children }) => <em className="italic text-gray-200">{children}</em>,
+                    // Emphasis/Italic with teal accent
+                    em: ({ children }) => <em className="italic text-teal-200">{children}</em>,
+                    // Tables (if needed)
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-4">
+                        <table className="min-w-full border border-teal-800/30 rounded-lg overflow-hidden">
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    thead: ({ children }) => (
+                      <thead className="bg-teal-900/20">
+                        {children}
+                      </thead>
+                    ),
+                    th: ({ children }) => (
+                      <th className="px-4 py-2 text-left text-sm font-medium text-teal-200 border-b border-teal-800/30">
+                        {children}
+                      </th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="px-4 py-2 text-sm text-gray-100 border-b border-teal-800/20">
+                        {children}
+                      </td>
+                    ),
+                    // Horizontal rules
+                    hr: () => (
+                      <hr className="my-6 border-0 h-px bg-gradient-to-r from-transparent via-teal-800/40 to-transparent" />
+                    ),
                   }}
                 >
                   {typeof msg.content === 'string' ? msg.content : String(msg.content || '')}
@@ -260,25 +466,65 @@ const MessageList: React.FC<MessageListProps> = ({
               </div>
             ) : (
               <div className="inline-block w-full">
-                <div className="prose prose-invert prose-sm !max-w-none w-full text-lg text-gray-100">
+                <div className="prose prose-invert prose-sm !max-w-none w-full text-base text-gray-100">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
+                    components={{
+                      // Keep user formatting simpler but consistent
+                      code: ({ children, ...props }) => (
+                        <code
+                          className="bg-black/40 text-teal-300 px-1.5 py-0.5 rounded text-sm font-mono border border-teal-800/20"
+                          {...props}
+                        >
+                          {children}
+                        </code>
+                      ),
+                      pre: ({ children }) => (
+                        <pre className="bg-black/40 border border-teal-800/20 rounded-lg p-3 overflow-x-auto text-sm font-mono my-3">
+                          {children}
+                        </pre>
+                      ),
+                      strong: ({ children }) => (
+                        <strong className="text-white font-semibold">{children}</strong>
+                      ),
+                      em: ({ children }) => <em className="italic text-teal-200">{children}</em>,
+                      a: ({ href, children }) => (
+                        <a
+                          href={href as string}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-teal-300 hover:text-teal-200 underline transition-colors"
+                        >
+                          {children}
+                        </a>
+                      ),
+                    }}
                   >
                     {typeof msg.content === 'string' ? msg.content : String(msg.content || '')}
                   </ReactMarkdown>
-                  {/* Render user attachments */}
-                  {msg.attachments?.map(att => (
-                    att.type.startsWith('audio/') ? (
-                      <audio key={att.id} controls src={att.url || att.base64} className="mt-2 max-w-full" />
-                    ) : att.type.startsWith('image/') ? (
-                      <img key={att.id} src={att.url} alt={att.name} className="mt-2 rounded-lg border border-teal-800/30" />
-                    ) : (
-                      <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="block text-teal-300 mt-2 underline">
-                        {att.name}
-                      </a>
-                    )
-                  ))}
                 </div>
+                {/* Render user attachments below the text message, aligned to the right */}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2 justify-end">
+                    {msg.attachments.map(att => (
+                      att.type.startsWith('audio/') ? (
+                        <audio key={att.id} controls src={att.url || att.base64} className="max-w-full" />
+                      ) : att.type.startsWith('image/') ? (
+                        <img 
+                          key={att.id} 
+                          src={att.url} 
+                          alt={att.name} 
+                          className="rounded-lg border border-teal-800/30 max-w-48 max-h-48 object-cover cursor-pointer hover:opacity-80 transition-opacity" 
+                          onClick={() => window.open(att.url, '_blank')}
+                        />
+                      ) : (
+                        <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="block text-teal-300 underline">
+                          {att.name}
+                        </a>
+                      )
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {/* Assistant audio playback */}
@@ -314,6 +560,8 @@ const MessageList: React.FC<MessageListProps> = ({
                   messageIndex={index}
                   getToken={getToken}
                   onBranch={onBranchChat}
+                  onRetry={onRetryMessage}
+                  onEdit={onEditMessage}
                   isAssistant={msg.role === 'assistant'}
                   messages={messages}
                 />
