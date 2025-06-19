@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import { useWebSocket } from "../../hooks/useWebSocket";
@@ -46,10 +46,11 @@ export default function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [inputText, setInputText] = useState('');
   const [selectedModel, _setSelectedModel] = useState('google/gemini-2.5-flash-preview-05-20'); // Default to first default model
-  const [selectedColor, setSelectedColor] = useState('#08615a');
+  const [selectedColor, setSelectedColor] = useState('#002421');
   const [gradientType, setGradientType] = useState('solid');
   const [containerOpacity, setContainerOpacity] = useState(0);
-  const [fontSize, setFontSize] = useState(100);
+  const [fontSize, setFontSize] = useState(90);
+  const [chatFontSize, setChatFontSize] = useState(100);
   const [apiKeys, setApiKeys] = useState<{[key: string]: string}>({});
   const [showApiKey, setShowApiKey] = useState<{[key: string]: boolean}>({});
   const [configuringProvider, setConfiguringProvider] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export default function ChatPage() {
   // === NEW: refs to debounce theme persistence for opacity & font size ===
   const opacityUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fontSizeUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatFontSizeUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // === NEW: Track when user is actively adjusting theme settings ===
   const [isAdjustingTheme, setIsAdjustingTheme] = useState(false);
@@ -80,6 +82,76 @@ export default function ChatPage() {
 
   // Width (in pixels) of the invisible edge hover area that auto-opens the panels.
   const HOVER_ZONE_WIDTH = 200;
+
+  // === EARLY THEME LOADING - PREVENTS FLASH ===
+  // Apply saved theme immediately before first render to prevent FOUC
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || !userId) return;
+    
+    // Synchronously load theme from localStorage cache first (if available)
+    const cachedTheme = localStorage.getItem(`xpochat:theme:${userId}`);
+    if (cachedTheme) {
+      try {
+        const theme = JSON.parse(cachedTheme);
+        applyThemeImmediate(theme.color, theme.gradientType, theme.containerOpacity, theme.fontSize, theme.chatFontSize);
+      } catch (e) {
+        // Ignore cache errors, will load from backend
+      }
+    }
+  }, [userId]);
+
+  // Helper function to apply theme immediately without state updates
+  const applyThemeImmediate = (color: string, gradType: string, containerOpacity?: number, fontSize?: number, chatFontSize?: number) => {
+    if (typeof document === 'undefined') return;
+    
+    // Apply CSS variables immediately
+    document.documentElement.style.setProperty('--teal-primary', color);
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    document.documentElement.style.setProperty('--teal-primary-rgb', `${r}, ${g}, ${b}`);
+    
+    // Apply other theme properties
+    if (containerOpacity !== undefined) {
+      const actualOpacity = 0.9 - (containerOpacity * 0.8) / 100;
+      document.documentElement.style.setProperty('--container-opacity', actualOpacity.toString());
+    }
+    if (fontSize !== undefined) {
+      const actualFontSize = 0.75 + (fontSize - 50) * 0.5 / 100;
+      document.documentElement.style.setProperty('--container-font-size', `${actualFontSize}rem`);
+    }
+    if (chatFontSize !== undefined) {
+      const actualChat = 0.75 + (chatFontSize - 50) * 0.5 / 100;
+      document.documentElement.style.setProperty('--chat-font-size', `${actualChat}rem`);
+    }
+    
+    // Apply background gradient
+    const getBackground = (color: string, gradType: string) => {
+      const baseColor = color || '#1a4a4a';
+      switch(gradType) {
+        case 'linear-diagonal':
+          return `linear-gradient(135deg, #0a0a0a 0%, ${baseColor} 100%)`;
+        case 'radial':
+          return `radial-gradient(circle at 50% 50%, ${baseColor} 0%, #0a0a0a 100%)`;
+        case 'linear-vertical':
+          return `linear-gradient(180deg, #0a0a0a 0%, ${baseColor} 100%)`;
+        case 'linear-horizontal':
+          return `linear-gradient(90deg, #0a0a0a 0%, ${baseColor} 100%)`;
+        default:
+          return baseColor;
+      }
+    };
+    
+    const background = getBackground(color, gradType);
+    const style = document.createElement('style');
+    style.innerHTML = `
+      body { background: ${background} !important; background-attachment: fixed; }
+      * { color: white !important; text-shadow: none !important; -webkit-font-smoothing: antialiased !important; }
+    `;
+    document.getElementById('dynamic-theme')?.remove();
+    style.id = 'dynamic-theme';
+    document.head.appendChild(style);
+  };
 
   // === Default Model Persistence ===
   const fetchDefaultModel = useCallback(async () => {
@@ -224,7 +296,19 @@ export default function ChatPage() {
       if (!response) return;
       if (!response.ok) throw new Error('Failed to fetch theme');
       const data = await response.json();
-      const { color, gradientType, containerOpacity, fontSize } = data.theme;
+      const { color, gradientType, containerOpacity, fontSize, chatFontSize: savedChatFontSize } = data.theme;
+      
+      // Cache theme data in localStorage for early loading on next visit
+      if (userId) {
+        try {
+          localStorage.setItem(`xpochat:theme:${userId}`, JSON.stringify({
+            color, gradientType, containerOpacity, fontSize, chatFontSize: savedChatFontSize
+          }));
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      }
+      
       setSelectedColor(color);
       setGradientType(gradientType);
       if (containerOpacity !== undefined) {
@@ -239,11 +323,16 @@ export default function ChatPage() {
         const actualFontSize = 0.75 + (fontSize - 50) * 0.5 / 100;
         document.documentElement.style.setProperty('--container-font-size', `${actualFontSize}rem`);
       }
+      if (savedChatFontSize !== undefined) {
+        setChatFontSize(savedChatFontSize);
+        const actualChat = 0.75 + (savedChatFontSize - 50) * 0.5 / 100;
+        document.documentElement.style.setProperty('--chat-font-size', `${actualChat}rem`);
+      }
       changeTheme(color, gradientType);
     } catch (error) {
 //      console.error('Error loading saved theme:', error);
     }
-  }, [getToken, changeTheme]);
+  }, [getToken, changeTheme, userId]);
 
   // Add loading state for chat switching
   const [isLoadingChat, setIsLoadingChat] = useState(false);
@@ -390,6 +479,17 @@ export default function ChatPage() {
     // Mark that user is adjusting theme settings
     markThemeAdjustment();
 
+    // Cache theme data in localStorage immediately
+    if (userId) {
+      try {
+        localStorage.setItem(`xpochat:theme:${userId}`, JSON.stringify({
+          color: selectedColor, gradientType, containerOpacity, fontSize, chatFontSize
+        }));
+      } catch (e) {
+        // Ignore localStorage errors
+      }
+    }
+
     // Debounce network persistence to avoid spamming while sliding
     if (opacityUpdateRef.current) clearTimeout(opacityUpdateRef.current);
     opacityUpdateRef.current = setTimeout(() => {
@@ -403,6 +503,7 @@ export default function ChatPage() {
             gradientType,
             containerOpacity,
             fontSize,
+            chatFontSize,
           }),
         }).catch(console.error)
       );
@@ -412,7 +513,7 @@ export default function ChatPage() {
     return () => {
       if (opacityUpdateRef.current) clearTimeout(opacityUpdateRef.current);
     };
-  }, [containerOpacity, selectedColor, gradientType, fontSize, getToken, userId, markThemeAdjustment]);
+  }, [containerOpacity, selectedColor, gradientType, fontSize, chatFontSize, getToken, userId, markThemeAdjustment]);
 
   // === NEW: Persist font size changes & update CSS ===
   useEffect(() => {
@@ -424,6 +525,17 @@ export default function ChatPage() {
 
     // Mark that user is adjusting theme settings
     markThemeAdjustment();
+
+    // Cache theme data in localStorage immediately
+    if (userId) {
+      try {
+        localStorage.setItem(`xpochat:theme:${userId}`, JSON.stringify({
+          color: selectedColor, gradientType, containerOpacity, fontSize, chatFontSize
+        }));
+      } catch (e) {
+        // Ignore localStorage errors
+      }
+    }
 
     // Debounce network persistence
     if (fontSizeUpdateRef.current) clearTimeout(fontSizeUpdateRef.current);
@@ -438,6 +550,7 @@ export default function ChatPage() {
             gradientType,
             containerOpacity,
             fontSize,
+            chatFontSize,
           }),
         }).catch(console.error)
       );
@@ -447,7 +560,52 @@ export default function ChatPage() {
     return () => {
       if (fontSizeUpdateRef.current) clearTimeout(fontSizeUpdateRef.current);
     };
-  }, [fontSize, selectedColor, gradientType, containerOpacity, getToken, userId, markThemeAdjustment]);
+  }, [fontSize, selectedColor, gradientType, containerOpacity, chatFontSize, getToken, userId, markThemeAdjustment]);
+
+  // === CHAT FONT SIZE EFFECT (no persistence yet) ===
+  useEffect(() => {
+    const actual = 0.75 + (chatFontSize - 50) * 0.5 / 100;
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--chat-font-size', `${actual}rem`);
+    }
+
+    // Mark user adjusting to keep panels open
+    markThemeAdjustment();
+
+    // Cache theme data in localStorage immediately
+    if (userId) {
+      try {
+        localStorage.setItem(`xpochat:theme:${userId}`, JSON.stringify({
+          color: selectedColor, gradientType, containerOpacity, fontSize, chatFontSize
+        }));
+      } catch (e) {
+        // Ignore localStorage errors
+      }
+    }
+
+    // Debounce optional future persistence
+    if (chatFontSizeUpdateRef.current) clearTimeout(chatFontSizeUpdateRef.current);
+    chatFontSizeUpdateRef.current = setTimeout(() => {
+      if (!userId) return;
+      getToken().then(token =>
+        fetchWithAuth(getToken, '/api/user/theme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            color: selectedColor,
+            gradientType,
+            containerOpacity,
+            fontSize,
+            chatFontSize,
+          }),
+        }).catch(console.error)
+      );
+    }, 300);
+
+    return () => {
+      if (chatFontSizeUpdateRef.current) clearTimeout(chatFontSizeUpdateRef.current);
+    };
+  }, [chatFontSize, selectedColor, gradientType, containerOpacity, fontSize, getToken, userId, markThemeAdjustment]);
 
   // === Helper: generate a readable title from message ===
   const generateTitle = (text: string) => {
@@ -558,13 +716,24 @@ export default function ChatPage() {
     const b = parseInt(color.slice(5, 7), 16);
     document.documentElement.style.setProperty('--teal-primary-rgb', `${r}, ${g}, ${b}`);
 
-    // Save theme
+    // Cache theme data in localStorage for immediate loading on next visit
+    if (userId) {
+      try {
+        localStorage.setItem(`xpochat:theme:${userId}`, JSON.stringify({
+          color, gradientType: gradType, containerOpacity, fontSize, chatFontSize
+        }));
+      } catch (e) {
+        // Ignore localStorage errors
+      }
+    }
+
+    // Save theme to backend
     if (userId) {
       getToken().then(token => 
         fetchWithAuth(getToken, '/api/user/theme', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ color, gradientType: gradType, containerOpacity, fontSize })
+          body: JSON.stringify({ color, gradientType: gradType, containerOpacity, fontSize, chatFontSize })
         }).then(response => {
           if (!response) return;
           // Optionally handle response
@@ -744,6 +913,73 @@ export default function ChatPage() {
     }
   };
 
+  const handleRetryMessage = async (messageIndex: number) => {
+    try {
+      // Get the user message to retry
+      const messageToRetry = messages[messageIndex];
+      
+      if (messageToRetry.role !== 'user') {
+        console.error('Can only retry user messages');
+        return;
+      }
+
+      // Remove all messages after the user message we're retrying
+      // This keeps the conversation up to and including the user message
+      const trimmedMessages = messages.slice(0, messageIndex + 1);
+      setMessages(trimmedMessages);
+
+      // Resend the user message without adding it to the UI again
+      // The sendMessage function will add a new user message, so we pass the history without the current message
+      const historyForRetry = messages.slice(0, messageIndex);
+      
+      if (typeof messageToRetry.content === 'string') {
+        sendMessage(
+          messageToRetry.content, 
+          selectedModel, 
+          historyForRetry, 
+          messageToRetry.attachments || []
+        );
+      }
+    } catch (err) {
+      console.error('Error retrying message:', err);
+    }
+  };
+
+  const handleEditMessage = async (messageIndex: number, newContent: string) => {
+    try {
+      // Get the user message to edit
+      const messageToEdit = messages[messageIndex];
+      
+      if (messageToEdit.role !== 'user') {
+        console.error('Can only edit user messages');
+        return;
+      }
+
+      // Update the message content in place
+      const updatedMessages = [...messages];
+      updatedMessages[messageIndex] = {
+        ...messageToEdit,
+        content: newContent
+      };
+
+      // Remove all messages after the edited message
+      const trimmedMessages = updatedMessages.slice(0, messageIndex + 1);
+      setMessages(trimmedMessages);
+
+      // Resend with the edited content
+      const historyForEdit = updatedMessages.slice(0, messageIndex);
+      
+      sendMessage(
+        newContent, 
+        selectedModel, 
+        historyForEdit, 
+        messageToEdit.attachments || []
+      );
+    } catch (err) {
+      console.error('Error editing message:', err);
+    }
+  };
+
   // Keep `isMobile` state in sync with viewport size (and close panels on shrink)
   useEffect(() => {
     const checkViewport = () => {
@@ -807,6 +1043,8 @@ export default function ChatPage() {
         onRenameChat={handleRenameChat}
         onDeleteChat={handleDeleteChat}
         onBranchChat={handleBranchChat}
+        onRetryMessage={handleRetryMessage}
+        onEditMessage={handleEditMessage}
         
         configuringProvider={configuringProvider}
         setConfiguringProvider={setConfiguringProvider}
@@ -825,6 +1063,8 @@ export default function ChatPage() {
         setContainerOpacity={setContainerOpacity}
         fontSize={fontSize}
         setFontSize={setFontSize}
+        chatFontSize={chatFontSize}
+        setChatFontSize={setChatFontSize}
         changeTheme={changeTheme}
         markThemeAdjustment={markThemeAdjustment}
         
@@ -880,7 +1120,7 @@ export default function ChatPage() {
             height: CHAT_HEIGHT,
             backgroundColor: `rgba(var(--teal-primary-rgb, 20, 184, 166), var(--container-opacity, 0.26))`,
           }}
-          className="w-full backdrop-blur-sm flex flex-col container-font rounded-lg"
+          className="w-full backdrop-blur-sm flex flex-col chat-font rounded-lg"
         >
           {/* Messages Area */}
           <div
@@ -897,6 +1137,8 @@ export default function ChatPage() {
               setMessages={setMessages} 
               currentChatId={currentChatId}
               onBranchChat={handleBranchChat}
+              onRetryMessage={handleRetryMessage}
+              onEditMessage={handleEditMessage}
               getToken={getToken}
             />
 
@@ -984,6 +1226,8 @@ export default function ChatPage() {
         setContainerOpacity={setContainerOpacity}
         fontSize={fontSize}
         setFontSize={setFontSize}
+        chatFontSize={chatFontSize}
+        setChatFontSize={setChatFontSize}
         changeTheme={changeTheme}
         markThemeAdjustment={markThemeAdjustment}
         onClose={() => !isAdjustingTheme && setRightPanelOpen(false)}

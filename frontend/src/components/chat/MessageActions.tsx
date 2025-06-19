@@ -7,6 +7,8 @@ interface MessageActionsProps {
   messageIndex?: number;
   getToken?: () => Promise<string | null>;
   onBranch?: (fromMessageIndex: number) => void;
+  onRetry?: (messageIndex: number) => void;
+  onEdit?: (messageIndex: number, newContent: string) => void;
   isAssistant?: boolean;
   messages?: any[]; // Add messages prop for sharing
 }
@@ -17,6 +19,8 @@ const MessageActions: React.FC<MessageActionsProps> = ({
   messageIndex, 
   getToken, 
   onBranch, 
+  onRetry,
+  onEdit,
   isAssistant = false,
   messages = []
 }) => {
@@ -24,8 +28,13 @@ const MessageActions: React.FC<MessageActionsProps> = ({
     copied: false,
     shared: false,
     branching: false,
-    sharing: false
+    sharing: false,
+    retrying: false,
+    editing: false
   });
+  
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState(content);
 
   const updateState = (key: keyof typeof states, value: boolean) => {
     setStates(prev => ({ ...prev, [key]: value }));
@@ -80,6 +89,46 @@ const MessageActions: React.FC<MessageActionsProps> = ({
     }
   };
 
+  const handleRetry = async () => {
+    if (!onRetry || messageIndex === undefined) return;
+    
+    updateState('retrying', true);
+    try {
+      await onRetry(messageIndex);
+    } catch (err) {
+      console.error('Retry failed', err);
+    } finally {
+      updateState('retrying', false);
+    }
+  };
+
+  const handleEdit = () => {
+    setEditMode(true);
+    setEditContent(content);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!onEdit || messageIndex === undefined || editContent.trim() === content.trim()) {
+      setEditMode(false);
+      return;
+    }
+    
+    updateState('editing', true);
+    try {
+      await onEdit(messageIndex, editContent.trim());
+      setEditMode(false);
+    } catch (err) {
+      console.error('Edit failed', err);
+    } finally {
+      updateState('editing', false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setEditContent(content);
+  };
+
   const ActionButton = ({ 
     onClick, 
     title, 
@@ -113,6 +162,45 @@ const MessageActions: React.FC<MessageActionsProps> = ({
     </svg>
   );
 
+  // If in edit mode for user messages, show edit interface
+  if (editMode && !isAssistant) {
+    return (
+      <div className="w-full mt-2">
+        <textarea
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          className="w-full p-3 bg-black/40 border border-teal-800/30 rounded-lg text-gray-100 text-sm resize-none focus:outline-none focus:border-teal-600/50"
+          rows={Math.min(Math.max(editContent.split('\n').length, 2), 8)}
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              handleSaveEdit();
+            } else if (e.key === 'Escape') {
+              handleCancelEdit();
+            }
+          }}
+        />
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={handleSaveEdit}
+            disabled={states.editing || editContent.trim() === content.trim()}
+            className="px-3 py-1 bg-teal-800/20 hover:bg-teal-800/30 text-teal-300 hover:text-teal-200 rounded text-sm border border-teal-800/30 hover:border-teal-600/50 transition-colors disabled:opacity-50"
+          >
+            {states.editing ? 'Saving...' : 'Save & Retry'}
+          </button>
+          <button
+            onClick={handleCancelEdit}
+            className="px-3 py-1 bg-black/20 hover:bg-black/40 text-gray-400 hover:text-gray-300 rounded text-sm border border-gray-800/30 hover:border-gray-600/50 transition-colors"
+          >
+            Cancel
+          </button>
+          <span className="text-xs text-gray-500">Ctrl+Enter to save, Esc to cancel</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
       {/* Copy Button */}
@@ -123,6 +211,32 @@ const MessageActions: React.FC<MessageActionsProps> = ({
           </svg>
         )}
       </ActionButton>
+
+      {/* Edit & Retry buttons only for user messages */}
+      {!isAssistant && onEdit && (
+        <ActionButton 
+          onClick={handleEdit} 
+          title="Edit this message"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </ActionButton>
+      )}
+
+      {!isAssistant && onRetry && (
+        <ActionButton 
+          onClick={handleRetry} 
+          title="Retry this message"
+          disabled={states.retrying}
+        >
+          {states.retrying ? <SpinIcon /> : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          )}
+        </ActionButton>
+      )}
 
       {/* Share & Branch buttons only for assistant messages */}
       {isAssistant && chatId && getToken && (

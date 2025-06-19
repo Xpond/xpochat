@@ -203,6 +203,15 @@ class WebSocketHandler {
       });
     }
     
+    // --- Ensure chat model stays in sync with user selection -----------------
+    // If the user selected a different model for this message than what is
+    // currently stored on the chat hash, update the chat state *before* we
+    // route the request so that the AI router picks the correct provider.
+    if (message.model && message.model !== chatState.model) {
+      await dragonflydb.updateChatState(chatId, { model: message.model });
+      log.debug('Chat model updated', { chatId, oldModel: chatState.model, newModel: message.model });
+    }
+    
     routeChat(userId, chatId, message.attachments);
     
     log.info('Chat processing routed', { userId, chatId });
